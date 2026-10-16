@@ -60,7 +60,7 @@ FedRAMP's rules ask a provider to evaluate each detected vulnerability and then 
 | req-fedramp-20x-vdr-cadence | [Detection Cadence](#v0-non-goals) | Backlog | The scan-frequency rules (VDR-TFR-PDD, -PCD, -PSD, -MVX). |
 | req-fedramp-20x-vdr-low-pain | [N0 And N1 Timeframes](#v0-non-goals) | Backlog | No published timeframe exists for PAIN N0 or N1; waits on FedRAMP. |
 | req-fedramp-20x-vdr-class | [Class Node](#v0-non-goals) | Backlog | Replaces the v0 default class with a node that records the class. |
-| req-fedramp-20x-vdr-partial | [Partly Evaluated Lookups](#v0-non-goals) | Backlog | Deadlines for evaluations with some factors set; needs a null default in Gryphon. |
+| req-fedramp-20x-vdr-partial | [Partly Evaluated Lookups](#v0-non-goals) | Backlog | Exact deadlines for evaluations with some factors set (v0 shows the worst-case bound); needs a per-finding lookup with a null default in Gryphon. |
 
 ### Evaluation
 ----
@@ -187,7 +187,7 @@ The effective value of a factor is what every deadline and incident rule uses. I
 
 In a Search the null case is written as `IS NULL OR = <value>`; no stored column holds an effective value. The class in v0 is one input to the shipped Searches, declared as `$fedramp_class` with the default `d` where a Search input can carry a default, and as a literal in the Search otherwise. It is deliberately the single place to change when a node that records the class exists (`req-fedramp-20x-vdr-class`, Backlog). A Search says on its face that the class was assumed.
 
-**Fail closed for the partly evaluated case.** Computing a deadline when some factors are set needs the timeframe row for the effective values, which needs a default for null inside a lookup that Gryphon does not have today. The v0 deadline and incident Searches therefore select only evaluations whose three factors are all `null`, and a separate Search lists every evaluation with at least one factor set, so none is silently missing (`req-fedramp-20x-vdr-partial`, Backlog).
+**Fail closed for the partly evaluated case.** An exact deadline for an evaluation with some factors set needs the timeframe row for its own effective values, which needs a default for null inside a lookup that Gryphon does not have today (`req-fedramp-20x-vdr-partial`, Backlog). Setting a factor must never take a finding out of the deadline Searches, so v0 applies the worst-case row (class D, N5, `lev_irv`) to **every** open evaluation whatever its factors say. Observed in the four timeframe tables as read on 2026-10-16: every row and every column is non-decreasing as a factor is lowered (PAIN from N5 toward N2, exposure from `lev_irv` to `nlev`), so the worst-case row gives the earliest deadline any evaluation can have. It is a bound, never later than the true deadline. A Search lists every evaluation with at least one factor set and marks its deadline as the worst-case bound.
 
 #### Acceptance Criteria
 
@@ -196,7 +196,8 @@ In a Search the null case is written as `IS NULL OR = <value>`; no stored column
 | req-fedramp-20x-vdr-effective-1 | Nothing Effective Is Stored | Proposed | No field of any node the plugin ships holds an effective or defaulted value. | |
 | req-fedramp-20x-vdr-effective-2 | Null Reads As Worst Case | Proposed | In the shipped Searches an evaluation with all factors `null` is treated as likely exploitable, internet-reachable, N5. | |
 | req-fedramp-20x-vdr-effective-3 | Class Is Assumed Visibly | Proposed | The class input defaults to `d` and the shipped Searches that use it say so in their description. | |
-| req-fedramp-20x-vdr-effective-4 | Partly Evaluated Is Listed, Not Computed | Proposed | An evaluation with any factor set appears in the "evaluated" Search and in none of the deadline or incident Searches. | |
+| req-fedramp-20x-vdr-effective-4 | Setting A Factor Never Removes A Deadline | Proposed | An evaluation with any factor set, with or without evidence, still appears in every deadline Search with the worst-case row applied, and is also listed in the "evaluated" Search with its deadline marked as the worst-case bound. | Closes the fail-open path found in review of the first draft. |
+| req-fedramp-20x-vdr-effective-5 | Worst Case Is A Bound | Proposed | A test over the seeded rows shows that, for every class, lowering PAIN or moving the exposure from `lev_irv` toward `nlev` never shortens `hours`. | Observed property of the tables as read; the test fails if a future table breaks it. |
 
 ### VDR-Max Collector
 ----
@@ -237,12 +238,13 @@ Deadlines are shipped as Searches, computed on read, never stored. Detection tim
 | Search | Meaning |
 | --- | --- |
 | evaluation overdue | Evaluations with `evaluated_at` null where `first_detected_at` plus the `VER-TFR-EVU` hours for the class is earlier than now. |
-| remediation due | For the all-null cohort: `first_detected_at` plus the `VDR-TFR-PVR` hours for the class at N5 and `lev_irv`, with the hours or days remaining. |
+| remediation due | For every open evaluation: `first_detected_at` plus the `VDR-TFR-PVR` hours for the class at N5 and `lev_irv`, with the hours or days remaining. |
 | remediation overdue | The same, restricted to those past the deadline. |
-| acceptance reached | Findings in the all-null cohort where `first_detected_at` plus the `VER-TFR-MAV` hours is earlier than now. |
-| detection time unobserved | Findings in the cohort whose `first_detected_at` is `null`. No deadline is computed for them and none is defaulted; they are listed. |
+| acceptance reached | Open evaluations where `first_detected_at` plus the `VER-TFR-MAV` hours is earlier than now. |
+| evaluated | Evaluations with at least one factor set, each marked as showing the worst-case bound (`req-fedramp-20x-vdr-effective`). |
+| detection time unobserved | Evaluations whose finding has a `null` `first_detected_at`. No deadline is computed for them and none is defaulted; they are listed. |
 
-For the v0 cohort of all-null evaluations the anchor is `first_detected_at` because `evaluated_at` is null by definition. The rules measure the remediation and acceptance clocks from evaluation, so the first-detection anchor is stricter than the text, and the Searches say so in their description. A finding that has been evaluated belongs to the partly evaluated Backlog item until Gryphon can do the lookup.
+The anchor is `first_detected_at` for every row, evaluated or not. The rules measure the remediation and acceptance clocks from evaluation, which is never earlier than detection, so the first-detection anchor combined with the worst-case row is a bound that is never later than the true deadline, and the Searches say so in their description. The exact deadline for an evaluated finding belongs to the partly evaluated Backlog item until Gryphon can do the per-finding lookup.
 
 #### Acceptance Criteria
 
@@ -264,15 +266,18 @@ FedRAMP lets a provider treat certain vulnerabilities as reportable incidents un
 
 #### Implementation
 
-Two Searches over the all-null cohort, taking the same class input as the deadlines. The first returns evaluations whose effective factors are likely exploitable, internet-reachable and PAIN above N3. The second returns those likely exploitable, not internet-reachable, and N5. In the all-null cohort the effective internet-reachability is true, so the second returns nothing; it can return rows only once an `internet_reachable` of false has been proven, which is the partly evaluated case. In v0 only the first returns rows, and the second is shipped with a description saying so. Each Search states whether the class makes the rule a SHOULD or a MAY.
+Two Searches over **every** open evaluation, taking the same class input as the deadlines. Neither needs a timeframe row, so the partly evaluated case is computed exactly, with the null cases written as `IS NULL OR`. The first returns evaluations whose effective factors are likely exploitable (`likely_exploitable` null or true), internet-reachable (`internet_reachable` null or true) and PAIN above N3 (`pain` null or in N4, N5). The second returns those likely exploitable, with `internet_reachable` false, and effective PAIN N5 (`pain` null or N5). Under the all-null worst case only the first returns rows; the second returns rows once an `internet_reachable` of false is recorded. Each Search states whether the class makes the rule a SHOULD or a MAY.
+
+**Named risk left open.** A factor that is set without an evidence edge lowers an evaluation's effective value and can take it out of these Searches, because an edge cannot be validated when its node is written. The check in `req-fedramp-20x-vdr-evidence-3` reports every such evaluation, and a page that shows incidents is expected to show that check beside them. v0 specifies no blocking gate; blocking is a decision for the consumer.
 
 #### Acceptance Criteria
 
 | ACID | Title | Status | Description | Notes |
 | --- | --- | :---: | --- | --- |
-| req-fedramp-20x-vdr-incidents-1 | Worst Case Is An Incident | Proposed | With the default class, every evaluation in the all-null cohort appears in the internet-reachable incident Search. | |
+| req-fedramp-20x-vdr-incidents-1 | Worst Case Is An Incident | Proposed | With the default class, every all-null evaluation appears in the internet-reachable incident Search. | |
 | req-fedramp-20x-vdr-incidents-2 | Threshold Is Above N3 | Proposed | The internet-reachable Search requires effective PAIN greater than N3, and the other requires N5. | |
 | req-fedramp-20x-vdr-incidents-3 | Modal Stated | Proposed | Each Search description says whether the rule is a SHOULD or a MAY for the class in use. | |
+| req-fedramp-20x-vdr-incidents-4 | Partly Evaluated Is Computed | Proposed | An evaluation with a factor set is placed by its effective values: `pain` of N3 leaves the first Search; `internet_reachable` of false moves a likely exploitable N5 into the second. | |
 
 ### v0 Non-Goals
 ----
@@ -286,7 +291,7 @@ The plugin does not, in v0:
 - mint findings, vulnerabilities, scanners or scan runs, or store a detection time (compliance_core owns them; Issue# 43 - compliance-core-tap);
 - compute dates itself (Gryphon owns that; Issue# 1064 - tap);
 - evaluate a finding that has no vulnerability edge, or a resolved one;
-- compute a deadline for an evaluation with any factor set (`req-fedramp-20x-vdr-partial`);
+- compute the exact deadline for an evaluation with any factor set; v0 shows the worst-case bound (`req-fedramp-20x-vdr-partial`);
 - invent a timeframe for PAIN N0 or N1 (`req-fedramp-20x-vdr-low-pain`);
 - represent the system's class as anything but the default input (`req-fedramp-20x-vdr-class`);
 - produce the per-period VDR report, grouping, false-positive or accepted-vulnerability records, detection cadence, or failures as vulnerabilities (the Backlog rows above).
