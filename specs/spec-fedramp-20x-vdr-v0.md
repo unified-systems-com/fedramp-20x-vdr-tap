@@ -246,7 +246,7 @@ Deadlines are shipped as Searches, computed on read, never stored. Detection tim
 
 | Search | Meaning |
 | --- | --- |
-| evaluation overdue | Evaluations with `evaluated_at` null where `first_detected_at` plus the `VER-TFR-EVU` hours for the class is earlier than now. |
+| evaluation overdue | Evaluations that are not **complete** where `first_detected_at` plus the `VER-TFR-EVU` hours for the class is earlier than now. An evaluation is complete only when `evaluated_at` is set and all three factors are set and evidence-backed; a timestamp alone does not complete it. Because `pain` cannot be set in v0, no evaluation is complete in v0, so every evaluation past its evaluation deadline is listed. |
 | remediation due | For every open evaluation: `first_detected_at` plus the `VDR-TFR-PVR` hours for the class at N5 and `lev_irv`, with the hours or days remaining. |
 | remediation overdue | The same, restricted to those past the deadline. |
 | acceptance reached | Open evaluations where `first_detected_at` plus the `VER-TFR-MAV` hours is earlier than now. |
@@ -263,6 +263,7 @@ Every Search above uses the v0 bound defined in the paragraph before this table,
 | req-fedramp-20x-vdr-deadlines-2 | Class D Worst Case | Proposed | For a finding detected at time t, the remediation deadline in v0 is t plus 12 hours. | The class D, N5, LEV and IRV cell. |
 | req-fedramp-20x-vdr-deadlines-3 | Unobserved Detection Is Listed | Proposed | A finding with null `first_detected_at` appears in the "detection time unobserved" Search and in no overdue Search. | |
 | req-fedramp-20x-vdr-deadlines-4 | Bound Stated, Anchor Is Detection | Proposed | Each remediation and acceptance Search counts from `first_detected_at` for every finding, evaluated or not, applies the worst-case row, and its description says it is a bound. | Anchoring an evaluated finding on `evaluated_at` with the worst-case row is non-conformant. |
+| req-fedramp-20x-vdr-deadlines-6 | A Timestamp Does Not Complete An Evaluation | Proposed | An evaluation with `evaluated_at` set but a factor null, unsupported or (in v0) `pain` unset still appears in the evaluation-overdue Search once past its evaluation deadline. | Closes the timestamp-only bypass found in review. |
 | req-fedramp-20x-vdr-deadlines-5 | Blocked Until The Dependencies Land | Proposed | The Searches are not shipped until `first_detected_at` and date arithmetic exist. | Issue# 43 - compliance-core-tap, Issue# 1064 - tap. |
 
 ### Reportable Incidents
