@@ -112,13 +112,15 @@ A factor is lowered only by evidence. The evidence is a `compliance_evidence` no
 
 | property | meaning |
 | --- | --- |
-| `factor` | Required. One of `likely_exploitable`, `internet_reachable`, `pain`. |
+| `factor` | Required. One of `likely_exploitable`, `internet_reachable`. `pain` is refused in v0, because no basis list for lowering PAIN exists yet; a PAIN set before then has no possible evidence edge and so reads as null (`req-fedramp-20x-vdr-effective-6`). The value joins this list when its bases are specified. |
 | `basis` | Required. A value from the closed list in `data/evidence_basis.json`. |
 | `note` | Optional free text. |
 
 Identity declares `{"discriminators": ["factor"]}`: one evidence node may support two factors of one evaluation, and those are two edges.
 
 `data/evidence_basis.json` ships with a JSON Schema and a `description` at the top and on every entry. Its first content is the nine justification values of the CycloneDX 1.6 vulnerability analysis (`code_not_present`, `code_not_reachable`, `requires_configuration`, `requires_dependency`, `requires_environment`, `protected_by_compiler`, `protected_at_runtime`, `protected_at_perimeter`, `protected_by_mitigating_control`). They were designed for "not affected" and fit the likely-exploitable and internet-reachable factors; bases for lowering `pain` are not yet specified and are an open item. Extending the list changes data, not the model.
+
+**What the edge proves and what it does not.** The model enforces that evidence exists, names the factor, and carries a basis from a closed list; a check also requires that the evidence is cited by the evaluated finding itself through `CITES_COMPLIANCE_EVIDENCE`, so evidence about nothing in particular cannot be attached to an unrelated finding (`req-fedramp-20x-vdr-evidence-5`). That the evidence supports the chosen value is **human-attested**: the `evaluator` who set the factor vouches for it, and the edge records what they relied on. The plugin does not claim to verify the substance of evidence.
 
 The check (`req-fedramp-20x-vdr-evidence-3`) is a Gryphon query run as a test and as a shipped Search: evaluations where a factor is non-null and no `CITES_FACTOR_EVIDENCE` edge for that factor exists, and evaluations where a factor is non-null but `evaluator` or `evaluated_at` is null.
 
@@ -129,6 +131,8 @@ The check (`req-fedramp-20x-vdr-evidence-3`) is a Gryphon query run as a test an
 | req-fedramp-20x-vdr-evidence-1 | Factor And Basis Required | Proposed | An evidence edge without `factor`, or with a `factor` or `basis` outside the lists, is refused. | |
 | req-fedramp-20x-vdr-evidence-2 | One Edge Per Factor | Proposed | The same evidence node cited for two factors of one evaluation is two edges; cited twice for one factor is one. | |
 | req-fedramp-20x-vdr-evidence-3 | Unsupported Factor Reported | Proposed | The check returns every evaluation with a non-null factor lacking an evidence edge for that factor, and every one with a non-null factor and a null `evaluator` or `evaluated_at`. | Detection after the fact; write-time enforcement is not possible because the node and its edges arrive in one batch. |
+| req-fedramp-20x-vdr-evidence-5 | Evidence Belongs To The Finding | Proposed | A check returns every `CITES_FACTOR_EVIDENCE` target that the evaluated finding does not also cite through `CITES_COMPLIANCE_EVIDENCE`. | Relevance of the evidence to the value is attested by the evaluator, not verified. |
+| req-fedramp-20x-vdr-evidence-6 | Pain Edges Refused In v0 | Proposed | A `CITES_FACTOR_EVIDENCE` edge with `factor` of `pain` is refused until a basis list for PAIN is specified. | |
 | req-fedramp-20x-vdr-evidence-4 | Basis List Is Data | Proposed | `data/evidence_basis.json` validates against its schema at load, and a basis is added without a code change. | |
 
 ### Timeframe Rows
