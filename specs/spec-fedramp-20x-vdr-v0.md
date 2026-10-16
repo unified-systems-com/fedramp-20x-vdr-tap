@@ -21,7 +21,7 @@ Default dimensions, one key for every node and edge the plugin ships:
 
 FedRAMP's rules ask a provider to evaluate each detected vulnerability and then to act on a clock that depends on the answer. Most operators loading a new system have only part of what a full evaluation needs, often just a count of vulnerabilities per host. The plugin therefore works as a stair-step, a proof by contradiction. Step 0, "VDR-max", presumes the worst case for every finding and makes the mechanics, tables and pages work on the grid that already exists. Later steps attach evidence that contradicts a presumption, and each contradiction lowers one factor for one finding. Adding evidence never changes the model; it only fills fields that were null.
 
-**Null is the worst case.** An unset factor is treated as the worst case, and that is actionable: it appears as work to do. A factor leaves null only through an evidence edge. The worst-case value is computed where it is read and is never written into the factor, so a reader cannot mistake "no one has looked" for "someone concluded N5". This is the grid's three-state rule (`req-grid-node-observation`): null is unobserved, an empty value is observed-empty, and a concrete value is an observation.
+**Null is the worst case.** An unset factor is treated as the worst case, and that is actionable: it appears as work to do. A factor leaves null, in the **effective** sense that every Search uses, only through an evidence edge. The stored fields are raw inputs, not answers: a concrete value without evidence can be stored (an edge cannot be checked when its node is written), and it is read as null by every shipped Search, so a page or Search that reads `vdr_evaluation` factors directly instead of through the shipped Searches is non-conformant (`req-fedramp-20x-vdr-effective-7`). The worst-case value is computed where it is read and is never written into the factor, so a reader cannot mistake "no one has looked" for "someone concluded N5". This is the grid's three-state rule (`req-grid-node-observation`): null is unobserved, an empty value is observed-empty, and a concrete value is an observation.
 
 **What the plugin deliberately does not do.** It does not judge anything about a vulnerability's published facts (CVSS, EPSS, KEV, SSVC live on `compliance_vulnerability` in compliance_core). It is not a scanner and mints no findings. It ships no pages or panels in v0.
 
@@ -35,7 +35,7 @@ FedRAMP's rules ask a provider to evaluate each detected vulnerability and then 
 | # | Name | Description |
 | --- | --- | --- |
 | 1 | Worst Case By Default | Every finding has an evaluation whose unset factors read as the worst case. |
-| 2 | Evidence Lowers | A factor leaves null only with an evidence edge naming the factor and its basis. |
+| 2 | Evidence Lowers | A factor reads as anything but the worst case only with an evidence edge naming the factor and its basis. |
 | 3 | Tables As Data | FedRAMP's timeframe tables are seeded rows that cite their rule, not constants in code. |
 | 4 | Computed Deadlines | Deadlines and overdue flags are computed from first detection and the seeded rows, never stored. |
 | 5 | Additive Stages | Attaching evidence in a later stage fills fields; it adds no migration and rewrites no node. |
@@ -95,6 +95,7 @@ The identity mirrors the finding's identity so that an evaluation is found again
 | req-fedramp-20x-vdr-evaluation-1 | Keyed By The Finding | Proposed | `vdr_evaluation` declares `NATURAL_KEY = ("finding_source", "finding_source_key")`; two writes for one finding are one node. | |
 | req-fedramp-20x-vdr-evaluation-2 | Null Is Unobserved | Proposed | A factor, `evaluator`, `evaluated_at` or `rationale` that no writer set is stored as `null`, never as `false`, `N5` or an empty string. | |
 | req-fedramp-20x-vdr-evaluation-3 | Values Are Checked | Proposed | `pain` outside `N0` to `N5`, a non-boolean factor, or an `evaluated_at` that is not a date-time is refused. | |
+| req-fedramp-20x-vdr-evaluation-6 | Pain Stays Null In v0 | Proposed | A write that sets `pain` to a non-null value is refused in v0, because no PAIN evidence edge can exist (`req-fedramp-20x-vdr-evidence-6`); the refusal is lifted when the PAIN basis list is specified. | Write-time enforcement is possible here because it needs no edge. |
 | req-fedramp-20x-vdr-evaluation-4 | Key Matches The Finding | Proposed | A check reports any evaluation whose key differs from the key of the finding it evaluates. | Detection after the fact: an edge cannot be validated against a node's fields at write time. |
 | req-fedramp-20x-vdr-evaluation-5 | One Per Finding | Proposed | A check reports any finding with more than one `EVALUATES_COMPLIANCE_FINDING` edge pointing at it. | |
 
@@ -204,6 +205,7 @@ In a Search the null case is written as `IS NULL OR = <value>`; no stored column
 | req-fedramp-20x-vdr-effective-3 | Class Is Assumed Visibly | Proposed | The class input defaults to `d` and the shipped Searches that use it say so in their description. | |
 | req-fedramp-20x-vdr-effective-4 | Setting A Factor Never Removes A Deadline | Proposed | An evaluation with any factor set, with or without evidence, still appears in every deadline Search with the worst-case row applied, and is also listed in the "evaluated" Search with its deadline marked as the worst-case bound. | Closes the fail-open path found in review of the first draft. |
 | req-fedramp-20x-vdr-effective-6 | Evidence Makes A Factor Count | Proposed | In every incident Search, a non-null factor with no evidence edge for that factor, or on an evaluation with a null `evaluator` or `evaluated_at`, reads as `null`. | See `req-fedramp-20x-vdr-incidents-5`. |
+| req-fedramp-20x-vdr-effective-7 | Raw Factors Are Not Answers | Proposed | Shipped pages, panels and Searches read the effective values only through the shipped Searches; none reads a `vdr_evaluation` factor field directly. | A review item for every consumer. |
 | req-fedramp-20x-vdr-effective-5 | Worst Case Is A Bound | Proposed | A test over the seeded rows shows that, for every class, lowering PAIN or moving the exposure from `lev_irv` toward `nlev` never shortens `hours`. | Observed property of the tables as read; the test fails if a future table breaks it. |
 
 ### VDR-Max Collector
@@ -216,7 +218,7 @@ The first stage starts from what the grid already holds. One derived collector r
 
 #### Implementation
 
-A `tap_cares` collector (built with the `build-collector` skill, asked for by the maintainer) that reads through Gryphon: findings with `status` `open` that have a `CONCERNS_COMPLIANCE_VULNERABILITY` edge. For each such finding that has no evaluation it emits one `vdr_evaluation` (key from the finding; every factor, `evaluator`, `evaluated_at` and `rationale` absent) and the `EVALUATES_COMPLIANCE_FINDING` edge, in one GRIFT batch. It never emits a node for a finding that already has an evaluation, because an upsert of a node would overwrite fields a person set. Resolved findings keep their evaluation untouched. A finding with no vulnerability edge is not evaluated in v0 (ruled 2026-10-16).
+A `tap_cares` collector that reads through Gryphon: findings with `status` `open` that have a `CONCERNS_COMPLIANCE_VULNERABILITY` edge. For each such finding that has no evaluation it emits one `vdr_evaluation` (key from the finding; every factor, `evaluator`, `evaluated_at` and `rationale` absent) and the `EVALUATES_COMPLIANCE_FINDING` edge, in one GRIFT batch. It never emits a node for a finding that already has an evaluation, because an upsert of a node would overwrite fields a person set. Resolved findings keep their evaluation untouched. A finding with no vulnerability edge is not evaluated in v0 (ruled 2026-10-16).
 
 The collector needs no credentials and makes no external call.
 
