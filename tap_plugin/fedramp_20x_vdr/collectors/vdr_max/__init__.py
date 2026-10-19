@@ -1,0 +1,1 @@
+"""The VDR-max collector."""
