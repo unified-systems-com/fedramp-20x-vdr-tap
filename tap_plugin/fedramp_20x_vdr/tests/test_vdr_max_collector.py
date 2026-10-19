@@ -239,6 +239,58 @@ class TestIdempotence:
         assert sorted(_evaluations()) == ["later", "old"]
 
 
+class TestReadsThatDisagree:
+    """The overwrite guard is only as good as the read behind it, so a read that looks wrong stops the run."""
+
+    def _failing_run(self, collector: Collector) -> Any:
+        job = run_collection(collector)
+        job.refresh_from_db()
+        assert job.status == CollectionJobStatus.FAILED.value, (job.status, job.summary)
+        return job
+
+    def test_an_existing_set_that_reads_empty_while_evaluations_are_connected_submits_nothing(
+        self, isolate_collector_registry: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """req-fedramp-20x-vdr-collector-7: a connected evaluation is an evaluation, so an "existing"
+        read that returns none of them is wrong, and acting on it would blank what people wrote."""
+        from tap_plugin.fedramp_20x_vdr.collectors.vdr_max import collector as module
+
+        _finding("a")
+        collector = _register()
+        _run(collector)
+        before = {k: _entity(e.entity_id).version for k, e in _evaluations().items()}
+        _finding("b", vulnerabilities=("CVE-2026-2",))
+
+        real = module.execute_gryphon_raw
+
+        def _flaky(query: str, inputs: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+            if query == module.EXISTING_EVALUATIONS:
+                return {"nodes": [], "edges": []}  # the bare empty envelope: looks like "none exist"
+            return real(query, inputs, **kwargs)
+
+        monkeypatch.setattr(module, "execute_gryphon_raw", _flaky)
+        job = self._failing_run(collector)
+        assert any(e.get("message_code") == "INCONSISTENT_READ" for e in job.results["error"])
+        monkeypatch.undo()
+        assert sorted(_evaluations()) == ["a"], "nothing was submitted, not even the legitimate new one"
+        assert {k: _entity(e.entity_id).version for k, e in _evaluations().items()} == before
+
+    def test_a_read_that_raises_fails_the_run_and_submits_nothing(
+        self, isolate_collector_registry: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from tap_plugin.fedramp_20x_vdr.collectors.vdr_max import collector as module
+
+        _finding("a")
+
+        def _boom(*args: Any, **kwargs: Any) -> dict[str, Any]:
+            raise RuntimeError("the read failed")
+
+        monkeypatch.setattr(module, "execute_gryphon_raw", _boom)
+        self._failing_run(_register())
+        monkeypatch.undo()
+        assert _evaluations() == {}
+
+
 class TestWriteSurface:
     def test_it_submits_one_batch_and_does_not_override_the_abort_default(
         self, isolate_collector_registry: Any, monkeypatch: pytest.MonkeyPatch

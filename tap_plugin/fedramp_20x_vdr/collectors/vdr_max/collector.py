@@ -61,6 +61,7 @@ _SITE_UNKEYED_FINDINGS = "8229"
 _SITE_NOTHING_TO_DO = "15e7"
 _SITE_BATCH_SUBMITTED = "d359"
 _SITE_READ_SHAPE = "c39d"
+_SITE_INCONSISTENT_READ = "b434"
 
 Key = tuple[str, str]
 
@@ -86,6 +87,19 @@ class VdrMaxCollector(CollectorBase):
         # is the step-0 bootstrap, and the old values stay in the node's history.
         connected, _ = self._read_keys(CONNECTED_EVALUATIONS)
         existing, _ = self._read_keys(EXISTING_EVALUATIONS)
+        if connected - existing:
+            # Every connected evaluation is an evaluation, so the connected set can never hold a key
+            # the existing set lacks. If it does, one of the two reads was wrong (an empty or partial
+            # answer taken for the whole), and sending identity-only nodes on that basis would blank
+            # evaluations people wrote. Stop; submit nothing.
+            self.record_error(
+                _SITE_INCONSISTENT_READ,
+                "INCONSISTENT_READ",
+                f"{len(connected - existing)} connected evaluation(s) are missing from the existing set; "
+                "the reads disagree, so nothing was submitted.",
+                message_data={"count": len(connected - existing)},
+            )
+            raise VdrMaxCollectorError("The evaluation reads are inconsistent; nothing was submitted.")
 
         if unkeyed:
             self.record_warn(

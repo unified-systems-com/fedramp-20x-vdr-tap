@@ -233,6 +233,7 @@ The collector needs no credentials and makes no external call.
 | req-fedramp-20x-vdr-collector-3 | Never Overwrites | Implemented | An evaluation with a factor, `evaluator` or `evaluated_at` set is not re-emitted by a later run. | |
 | req-fedramp-20x-vdr-collector-4 | Unlinked Findings Skipped | Implemented | An open finding with no vulnerability edge receives no evaluation. | |
 | req-fedramp-20x-vdr-collector-5 | Writes Through GRIFT | Implemented | The collector submits one GRIFT batch and aborts on rejection. | |
+| req-fedramp-20x-vdr-collector-7 | Disagreeing Reads Stop The Run | Implemented | If the set of connected evaluations holds a key the set of existing evaluations lacks, which cannot be true, the run records `INCONSISTENT_READ`, fails and submits nothing; a Gryphon read that raises fails the run likewise. | An empty-looking "existing" read is the one way the no-overwrite guard could fail open. Found in review of PR# 5. |
 | req-fedramp-20x-vdr-collector-6 | Reconnects An Edge-Less Evaluation | Implemented | An evaluation that exists but has no `EVALUATES_COMPLIANCE_FINDING` edge, for an open linked finding, gets that edge and nothing else; its node is not re-sent. | Every Search traverses the edge. Found in review of PR# 5. |
 
 ### Deadlines
