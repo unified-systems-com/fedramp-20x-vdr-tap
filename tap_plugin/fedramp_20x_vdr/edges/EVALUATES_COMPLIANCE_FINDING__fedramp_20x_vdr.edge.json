@@ -1,0 +1,17 @@
+{
+  "slug": "EVALUATES_COMPLIANCE_FINDING__fedramp_20x_vdr",
+  "name": "Evaluates Compliance Finding",
+  "description": "A VDR evaluation judges one compliance finding: its likelihood of exploitation, its internet reachability and its potential agency impact under FedRAMP's Vulnerability Detection and Response rules. One evaluation per finding; the evaluation's identity repeats the finding's, and a check reports any disagreement. The finding type belongs to compliance_core, which this plugin depends on.",
+  "sources": [
+    "fedramp_20x_vdr__vdr_evaluation"
+  ],
+  "targets": [
+    "compliance_core__compliance_finding"
+  ],
+  "identity": {
+    "discriminators": []
+  },
+  "default_dimensions": {
+    "fedramp.rule": "vdr"
+  }
+}

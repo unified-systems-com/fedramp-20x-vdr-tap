@@ -1,0 +1,43 @@
+{
+  "description": "The closed list of bases an evidence edge may give for lowering a VDR factor (likely_exploitable, internet_reachable). The nine keys and their wording are the justification values of the CycloneDX 1.6 vulnerability analysis (impactAnalysisJustification), read from the CycloneDX specification repository on 2026-10-16. They were written for 'not affected' and fit these two factors; bases for lowering pain are not yet specified and are deliberately absent (req-fedramp-20x-vdr-evidence-6). The enum on the edge definition CITES_FACTOR_EVIDENCE__fedramp_20x_vdr is the enforced copy of these keys; a test fails if the two differ.",
+  "source": "https://github.com/CycloneDX/specification (schema/bom-1.6.schema.json, definitions.impactAnalysisJustification)",
+  "read_at": "2026-10-16",
+  "bases": [
+    {
+      "key": "code_not_present",
+      "description": "The code has been removed or tree-shaked."
+    },
+    {
+      "key": "code_not_reachable",
+      "description": "The vulnerable code is not invoked at runtime."
+    },
+    {
+      "key": "requires_configuration",
+      "description": "Exploitability requires a configurable option to be set/unset."
+    },
+    {
+      "key": "requires_dependency",
+      "description": "Exploitability requires a dependency that is not present."
+    },
+    {
+      "key": "requires_environment",
+      "description": "Exploitability requires a certain environment which is not present."
+    },
+    {
+      "key": "protected_by_compiler",
+      "description": "Exploitability requires a compiler flag to be set/unset."
+    },
+    {
+      "key": "protected_at_runtime",
+      "description": "Exploits are prevented at runtime."
+    },
+    {
+      "key": "protected_at_perimeter",
+      "description": "Attacks are blocked at physical, logical, or network perimeter."
+    },
+    {
+      "key": "protected_by_mitigating_control",
+      "description": "Preventative measures have been implemented that reduce the likelihood and/or impact of the vulnerability."
+    }
+  ]
+}

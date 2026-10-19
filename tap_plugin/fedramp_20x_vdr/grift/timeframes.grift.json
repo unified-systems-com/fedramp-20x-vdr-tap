@@ -1,0 +1,1083 @@
+{
+  "metadata": {
+    "grift_version": "0"
+  },
+  "_reserved": {},
+  "batches": [
+    {
+      "batch_entity": {
+        "entity_id": "01a15480-0956-7547-9291-341940a9c507",
+        "entity_type": "batch",
+        "name": "FedRAMP 20x VDR Timeframes v0.1.0",
+        "dimensions": {}
+      },
+      "batch_node": {
+        "source": "plugins.fedramp_20x_vdr.grift.timeframes",
+        "name": "FedRAMP 20x VDR Timeframes v0.1.0",
+        "description": "Seeds the 53 vdr_timeframe rows: the VDR-TFR-PVR remediation tables (classes a to d, PAIN N2 to N5, three exposures), the VER-TFR-EVU evaluation deadlines and the VER-TFR-MAV acceptance limit, read as raw HTML from fedramp.gov on 2026-10-16. No row exists for PAIN N0 or N1: the pages publish none. See specs/spec-fedramp-20x-vdr-v0.md (req-fedramp-20x-vdr-timeframe)."
+      },
+      "nodes": [
+        {
+          "entity": {
+            "entity_id": "01a15480-0956-7547-9291-341a012193ee",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR a N5 lev_irv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "a",
+            "pain": "N5",
+            "exposure": "lev_irv",
+            "hours": 96,
+            "canon_cell": "4 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0956-7547-9291-341b91a19937",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR a N5 lev_nirv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "a",
+            "pain": "N5",
+            "exposure": "lev_nirv",
+            "hours": 192,
+            "canon_cell": "8 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ea2e5058363",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR a N5 nlev",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "a",
+            "pain": "N5",
+            "exposure": "nlev",
+            "hours": 768,
+            "canon_cell": "32 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ea3bb294733",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR a N4 lev_irv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "a",
+            "pain": "N4",
+            "exposure": "lev_irv",
+            "hours": 192,
+            "canon_cell": "8 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ea43c251d98",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR a N4 lev_nirv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "a",
+            "pain": "N4",
+            "exposure": "lev_nirv",
+            "hours": 768,
+            "canon_cell": "32 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ea5774252b9",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR a N4 nlev",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "a",
+            "pain": "N4",
+            "exposure": "nlev",
+            "hours": 1536,
+            "canon_cell": "64 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ea660e53d27",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR a N3 lev_irv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "a",
+            "pain": "N3",
+            "exposure": "lev_irv",
+            "hours": 768,
+            "canon_cell": "32 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ea722e1b1ec",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR a N3 lev_nirv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "a",
+            "pain": "N3",
+            "exposure": "lev_nirv",
+            "hours": 1536,
+            "canon_cell": "64 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ea8ece20971",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR a N3 nlev",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "a",
+            "pain": "N3",
+            "exposure": "nlev",
+            "hours": 4608,
+            "canon_cell": "192 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ea9729e04c5",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR a N2 lev_irv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "a",
+            "pain": "N2",
+            "exposure": "lev_irv",
+            "hours": 2304,
+            "canon_cell": "96 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6eaad9aacd3b",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR a N2 lev_nirv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "a",
+            "pain": "N2",
+            "exposure": "lev_nirv",
+            "hours": 3840,
+            "canon_cell": "160 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6eabc62b94da",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR a N2 nlev",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "a",
+            "pain": "N2",
+            "exposure": "nlev",
+            "hours": 4608,
+            "canon_cell": "192 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6eac0686eea5",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR b N5 lev_irv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "b",
+            "pain": "N5",
+            "exposure": "lev_irv",
+            "hours": 96,
+            "canon_cell": "4 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ead7494bff7",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR b N5 lev_nirv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "b",
+            "pain": "N5",
+            "exposure": "lev_nirv",
+            "hours": 192,
+            "canon_cell": "8 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6eaeb11abb91",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR b N5 nlev",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "b",
+            "pain": "N5",
+            "exposure": "nlev",
+            "hours": 768,
+            "canon_cell": "32 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6eaf68930264",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR b N4 lev_irv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "b",
+            "pain": "N4",
+            "exposure": "lev_irv",
+            "hours": 192,
+            "canon_cell": "8 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6eb02bac5637",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR b N4 lev_nirv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "b",
+            "pain": "N4",
+            "exposure": "lev_nirv",
+            "hours": 768,
+            "canon_cell": "32 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6eb1bde1aa4f",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR b N4 nlev",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "b",
+            "pain": "N4",
+            "exposure": "nlev",
+            "hours": 1536,
+            "canon_cell": "64 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6eb2571418b1",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR b N3 lev_irv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "b",
+            "pain": "N3",
+            "exposure": "lev_irv",
+            "hours": 768,
+            "canon_cell": "32 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6eb363f30d79",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR b N3 lev_nirv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "b",
+            "pain": "N3",
+            "exposure": "lev_nirv",
+            "hours": 1536,
+            "canon_cell": "64 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6eb48ce78a03",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR b N3 nlev",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "b",
+            "pain": "N3",
+            "exposure": "nlev",
+            "hours": 4608,
+            "canon_cell": "192 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6eb5bf39ef2e",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR b N2 lev_irv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "b",
+            "pain": "N2",
+            "exposure": "lev_irv",
+            "hours": 2304,
+            "canon_cell": "96 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6eb635e2a18b",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR b N2 lev_nirv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "b",
+            "pain": "N2",
+            "exposure": "lev_nirv",
+            "hours": 3840,
+            "canon_cell": "160 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6eb73ef34707",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR b N2 nlev",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "b",
+            "pain": "N2",
+            "exposure": "nlev",
+            "hours": 4608,
+            "canon_cell": "192 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6eb88bc9825d",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR c N5 lev_irv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "c",
+            "pain": "N5",
+            "exposure": "lev_irv",
+            "hours": 48,
+            "canon_cell": "2 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6eb997bff4db",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR c N5 lev_nirv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "c",
+            "pain": "N5",
+            "exposure": "lev_nirv",
+            "hours": 96,
+            "canon_cell": "4 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ebad8295c6d",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR c N5 nlev",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "c",
+            "pain": "N5",
+            "exposure": "nlev",
+            "hours": 384,
+            "canon_cell": "16 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ebbd34f85be",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR c N4 lev_irv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "c",
+            "pain": "N4",
+            "exposure": "lev_irv",
+            "hours": 96,
+            "canon_cell": "4 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ebc9b7fb810",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR c N4 lev_nirv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "c",
+            "pain": "N4",
+            "exposure": "lev_nirv",
+            "hours": 192,
+            "canon_cell": "8 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ebd3861c132",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR c N4 nlev",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "c",
+            "pain": "N4",
+            "exposure": "nlev",
+            "hours": 1536,
+            "canon_cell": "64 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ebe83f81110",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR c N3 lev_irv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "c",
+            "pain": "N3",
+            "exposure": "lev_irv",
+            "hours": 384,
+            "canon_cell": "16 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ebff69546d1",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR c N3 lev_nirv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "c",
+            "pain": "N3",
+            "exposure": "lev_nirv",
+            "hours": 768,
+            "canon_cell": "32 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ec015fc0edd",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR c N3 nlev",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "c",
+            "pain": "N3",
+            "exposure": "nlev",
+            "hours": 3072,
+            "canon_cell": "128 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ec1bb779571",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR c N2 lev_irv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "c",
+            "pain": "N2",
+            "exposure": "lev_irv",
+            "hours": 1152,
+            "canon_cell": "48 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ec22be1c48b",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR c N2 lev_nirv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "c",
+            "pain": "N2",
+            "exposure": "lev_nirv",
+            "hours": 3072,
+            "canon_cell": "128 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ec34dc60979",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR c N2 nlev",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "c",
+            "pain": "N2",
+            "exposure": "nlev",
+            "hours": 4608,
+            "canon_cell": "192 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ec4e86ef68d",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR d N5 lev_irv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "d",
+            "pain": "N5",
+            "exposure": "lev_irv",
+            "hours": 12,
+            "canon_cell": "12 hours",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ec5b096efd9",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR d N5 lev_nirv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "d",
+            "pain": "N5",
+            "exposure": "lev_nirv",
+            "hours": 24,
+            "canon_cell": "1 day",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ec6971c2dd1",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR d N5 nlev",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "d",
+            "pain": "N5",
+            "exposure": "nlev",
+            "hours": 192,
+            "canon_cell": "8 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ec79e14d79a",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR d N4 lev_irv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "d",
+            "pain": "N4",
+            "exposure": "lev_irv",
+            "hours": 48,
+            "canon_cell": "2 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ec897356c7e",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR d N4 lev_nirv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "d",
+            "pain": "N4",
+            "exposure": "lev_nirv",
+            "hours": 192,
+            "canon_cell": "8 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ec9f3662374",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR d N4 nlev",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "d",
+            "pain": "N4",
+            "exposure": "nlev",
+            "hours": 768,
+            "canon_cell": "32 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6eca9c53f586",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR d N3 lev_irv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "d",
+            "pain": "N3",
+            "exposure": "lev_irv",
+            "hours": 192,
+            "canon_cell": "8 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ecbc4f82aa3",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR d N3 lev_nirv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "d",
+            "pain": "N3",
+            "exposure": "lev_nirv",
+            "hours": 384,
+            "canon_cell": "16 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ecc64fedd90",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR d N3 nlev",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "d",
+            "pain": "N3",
+            "exposure": "nlev",
+            "hours": 1536,
+            "canon_cell": "64 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ecdb16a6078",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR d N2 lev_irv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "d",
+            "pain": "N2",
+            "exposure": "lev_irv",
+            "hours": 576,
+            "canon_cell": "24 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ece84f243fa",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR d N2 lev_nirv",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "d",
+            "pain": "N2",
+            "exposure": "lev_nirv",
+            "hours": 2304,
+            "canon_cell": "96 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ecf960ab6fd",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VDR-TFR-PVR d N2 nlev",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VDR-TFR-PVR",
+            "fedramp_class": "d",
+            "pain": "N2",
+            "exposure": "nlev",
+            "hours": 4608,
+            "canon_cell": "192 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-detection-and-response/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ed047342618",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VER-TFR-EVU a",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VER-TFR-EVU",
+            "fedramp_class": "a",
+            "pain": "",
+            "exposure": "",
+            "hours": 336,
+            "canon_cell": "14 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-evaluation-and-reporting/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ed163cd08aa",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VER-TFR-EVU b",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VER-TFR-EVU",
+            "fedramp_class": "b",
+            "pain": "",
+            "exposure": "",
+            "hours": 168,
+            "canon_cell": "7 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-evaluation-and-reporting/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ed21303c47f",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VER-TFR-EVU c",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VER-TFR-EVU",
+            "fedramp_class": "c",
+            "pain": "",
+            "exposure": "",
+            "hours": 120,
+            "canon_cell": "5 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-evaluation-and-reporting/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ed36af94855",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VER-TFR-EVU d",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VER-TFR-EVU",
+            "fedramp_class": "d",
+            "pain": "",
+            "exposure": "",
+            "hours": 48,
+            "canon_cell": "2 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-evaluation-and-reporting/"
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a15480-0957-714c-b93c-6ed4b89521ed",
+            "entity_type": "fedramp_20x_vdr__vdr_timeframe",
+            "name": "VER-TFR-MAV all",
+            "dimensions": {
+              "fedramp.rule": "vdr"
+            }
+          },
+          "node": {
+            "rule": "VER-TFR-MAV",
+            "fedramp_class": "all",
+            "pain": "",
+            "exposure": "",
+            "hours": 4608,
+            "canon_cell": "192 days",
+            "canon_read_at": "2026-10-16",
+            "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-evaluation-and-reporting/"
+          }
+        }
+      ]
+    }
+  ]
+}

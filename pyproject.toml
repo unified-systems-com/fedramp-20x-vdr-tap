@@ -1,0 +1,30 @@
+# Identity chain (pre-boot conformance gate enforces agreement):
+#   slug = "fedramp_20x_vdr"  ·  distribution = "fedramp-20x-vdr-tap"  ·  import namespace = "tap_plugin.fedramp_20x_vdr"
+#   entry-point key = "fedramp_20x_vdr"
+# Spec: specs/spec-fedramp-20x-vdr-v0.md.
+[project]
+name = "fedramp-20x-vdr-tap"
+description = "TAP FedRAMP 20x VDR plugin — per-finding vulnerability evaluation (LEV, IRV, PAIN), the remediation timeframe tables as data, and the deadlines they imply."
+requires-python = ">=3.14"
+dynamic = ["version"]
+dependencies = ["compliance-core-tap"]
+
+[project.entry-points."tap.plugins"]
+fedramp_20x_vdr = "tap_plugin.fedramp_20x_vdr.apps:FedrampVdrConfig"
+
+# The plugin's OWN dev closure (PEP 735), so its suite runs in a bare checkout. Never installed by boot.
+[dependency-groups]
+dev = ["pytest>=8.3", "pytest-django>=4.9", "factory-boy>=3.3"]
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+fallback_version = "0.0.0"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["tap_plugin/fedramp_20x_vdr"]
