@@ -155,7 +155,7 @@ class TestWhatItLeavesAlone:
 
     def test_an_evaluation_a_person_wrote_is_never_overwritten(self, isolate_collector_registry: Any) -> None:
         """req-fedramp-20x-vdr-collector-3: the node is not re-emitted, so its fields survive."""
-        _finding("mine")
+        mine_finding = _finding("mine")
         _finding("new")
         written = create_node(
             EVALUATION,
@@ -176,6 +176,30 @@ class TestWhatItLeavesAlone:
         assert mine.rationale == "Only reachable through the proxy."
         assert _entity(written.entity_id).version == version_before, "the entity was not even rewritten"
         assert sorted(_evaluations()) == ["mine", "new"]
+        # It had no edge to its finding, which every Search traverses, so the run gave it the edge
+        # and nothing else.
+        edge = Edge.objects.get(edge_type=EVALUATES, from_entity_id=written.entity_id)
+        assert str(edge.to_entity_id) == mine_finding
+
+    def test_an_evaluation_with_no_edge_is_reconnected_and_only_with_the_edge(
+        self, isolate_collector_registry: Any
+    ) -> None:
+        """req-fedramp-20x-vdr-collector-6: an edge-less evaluation of an in-scope finding gets its edge."""
+        finding = _finding("orphan")
+        orphan = create_node(
+            EVALUATION,
+            {"finding_source": "github_core", "finding_source_key": "orphan", "rationale": "typed by hand"},
+        )
+        assert orphan.success, orphan.errors
+        assert not Edge.objects.filter(edge_type=EVALUATES).exists()
+        collector = _register()
+        job = _run(collector)
+        assert "reconnected 1" in job.summary and "0 new evaluation" in job.summary
+        assert [str(e.to_entity_id) for e in Edge.objects.filter(edge_type=EVALUATES)] == [finding]
+        assert _evaluations()["orphan"].rationale == "typed by hand"
+        assert len(_evaluations()) == 1, "no second evaluation was made"
+        again = _run(collector)
+        assert "No new evaluations" in again.summary, "and the next run has nothing left to do"
 
     def test_a_resolved_finding_keeps_its_evaluation(self, isolate_collector_registry: Any) -> None:
         _finding("will-resolve")

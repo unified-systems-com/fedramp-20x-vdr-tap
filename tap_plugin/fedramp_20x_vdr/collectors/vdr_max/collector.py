@@ -48,6 +48,14 @@ EXISTING_EVALUATIONS = (
     "RETURN e.data.finding_source AS source, e.data.finding_source_key AS source_key"
 )
 
+#: The evaluations that already have their edge to a finding. Every Search this plugin ships
+#: traverses that edge, so an evaluation without it is invisible to them.
+CONNECTED_EVALUATIONS = (
+    "MATCH (e:fedramp_20x_vdr__vdr_evaluation)-[:EVALUATES_COMPLIANCE_FINDING__fedramp_20x_vdr]->"
+    "(f:compliance_core__compliance_finding) "
+    "RETURN e.data.finding_source AS source, e.data.finding_source_key AS source_key"
+)
+
 _SITE_RUN_STARTED = "700d"
 _SITE_UNKEYED_FINDINGS = "8229"
 _SITE_NOTHING_TO_DO = "15e7"
@@ -71,6 +79,12 @@ class VdrMaxCollector(CollectorBase):
         self.declare_no_surfaces()
 
         findings, unkeyed = self._read_keys(OPEN_LINKED_FINDINGS)
+        # The existing set is read last, directly before the batch is built and submitted, to keep
+        # the window as short as it can be. It cannot be closed: a GRIFT node under an existing key
+        # REPLACES the row (pinned by tests/test_vdr_evaluation.py), so an evaluation a person wrote
+        # between this read and the submit would be blanked. The window is milliseconds, the collector
+        # is the step-0 bootstrap, and the old values stay in the node's history.
+        connected, _ = self._read_keys(CONNECTED_EVALUATIONS)
         existing, _ = self._read_keys(EXISTING_EVALUATIONS)
 
         if unkeyed:
@@ -83,22 +97,31 @@ class VdrMaxCollector(CollectorBase):
             )
 
         missing = sorted(findings - existing)
-        if not missing:
-            self.summary = f"No new evaluations: {len(findings)} open linked finding(s), all already evaluated" + (
-                f"; {unkeyed} skipped for want of a key." if unkeyed else "."
-            )
+        # An evaluation that exists but has no edge to its finding (a partial import, a person's write
+        # that skipped it) is reconnected with the edge alone: the node is not re-emitted, so nothing
+        # a person set on it can be touched. Only findings in scope are reconnected, because those are
+        # the ones known to exist for the edge to land on.
+        unconnected = sorted((existing - connected) & findings)
+        skipped = f"; {unkeyed} skipped for want of a key." if unkeyed else "."
+        if not missing and not unconnected:
+            self.summary = f"No new evaluations: {len(findings)} open linked finding(s), all already evaluated{skipped}"
             self.record_info(_SITE_NOTHING_TO_DO, "NOTHING_TO_DO", self.summary)
             return
 
-        self.submit_grift(self._document(missing))
-        self.summary = f"Submitted {len(missing)} new evaluation(s) for {len(findings)} open linked finding(s)" + (
-            f"; {unkeyed} skipped for want of a key." if unkeyed else "."
+        self.submit_grift(self._document(missing, unconnected))
+        self.summary = (
+            f"Submitted {len(missing)} new evaluation(s) and reconnected {len(unconnected)} for "
+            f"{len(findings)} open linked finding(s){skipped}"
         )
         self.record_info(
             _SITE_BATCH_SUBMITTED,
             "BATCH_SUBMITTED",
             self.summary,
-            message_data={"new_evaluations": len(missing), "open_linked_findings": len(findings)},
+            message_data={
+                "new_evaluations": len(missing),
+                "reconnected": len(unconnected),
+                "open_linked_findings": len(findings),
+            },
         )
 
     def _read_keys(self, query: str) -> tuple[set[Key], int]:
@@ -128,10 +151,34 @@ class VdrMaxCollector(CollectorBase):
         return keys, unkeyed
 
     @staticmethod
-    def _document(missing: list[Key]) -> dict[str, Any]:
-        """One batch: an evaluation per missing finding, each with the edge that names its finding."""
+    def _document(missing: list[Key], unconnected: list[Key]) -> dict[str, Any]:
+        """One batch: an evaluation per missing finding, each with the edge that names its finding.
+
+        An evaluation that exists but has no edge gets the edge alone, naming both ends by natural
+        key; its node is not in the batch.
+        """
         nodes: list[dict[str, Any]] = []
         edges: list[dict[str, Any]] = []
+        for index, (source, source_key) in enumerate(unconnected):
+            edges.append(
+                {
+                    "entity": {
+                        "ref": f"reconnects-{index}",
+                        "entity_type": "edge",
+                        "name": EVALUATES_EDGE,
+                        "dimensions": {"fedramp.rule": "vdr"},
+                    },
+                    "edge": {
+                        "from_key": {
+                            "entity_type": EVALUATION_TYPE,
+                            "key": {"finding_source": source, "finding_source_key": source_key},
+                        },
+                        "to_key": {"entity_type": FINDING_TYPE, "key": {"source": source, "source_key": source_key}},
+                        "edge_type": EVALUATES_EDGE,
+                        "properties": {},
+                    },
+                }
+            )
         for index, (source, source_key) in enumerate(missing):
             ref = f"evaluation-{index}"
             nodes.append(
@@ -171,17 +218,18 @@ class VdrMaxCollector(CollectorBase):
                     "batch_entity": {
                         "entity_id": str(uuid.uuid4()),
                         "entity_type": "batch",
-                        "name": f"FedRAMP 20x VDR max evaluations ({len(missing)})",
+                        "name": f"FedRAMP 20x VDR max evaluations ({len(missing)} new, {len(unconnected)} reconnected)",
                         "dimensions": {},
                     },
                     "batch_node": {
                         "source": BATCH_SOURCE,
-                        "name": f"FedRAMP 20x VDR max evaluations ({len(missing)})",
+                        "name": f"FedRAMP 20x VDR max evaluations ({len(missing)} new, {len(unconnected)} reconnected)",
                         "description": "An evaluation with every factor unset for each open finding that "
-                        "concerns a vulnerability and has none.",
+                        "concerns a vulnerability and has none, and the missing edge for an evaluation that "
+                        "exists without one.",
                         "description_json": {
                             "format": "tap.fedramp_20x_vdr.collection-v0",
-                            "data": {"new_evaluations": len(missing)},
+                            "data": {"new_evaluations": len(missing), "reconnected": len(unconnected)},
                         },
                     },
                     "nodes": nodes,
