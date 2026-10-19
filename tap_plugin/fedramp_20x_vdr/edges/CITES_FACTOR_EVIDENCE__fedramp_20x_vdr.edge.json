@@ -1,0 +1,53 @@
+{
+  "slug": "CITES_FACTOR_EVIDENCE__fedramp_20x_vdr",
+  "name": "Cites Factor Evidence",
+  "description": "A VDR evaluation relies on a piece of compliance evidence for one factor of the evaluation (likely_exploitable or internet_reachable). Without such an edge a factor reads as unset, the worst case, whatever value is stored. The factor says which of the two the evidence supports and the basis says why, from a closed list. One evidence node may support both factors of one evaluation, as two edges. That the evidence supports the chosen value is attested by the evaluator and is not verified here. The existing CITES_COMPLIANCE_EVIDENCE starts at a finding, so it cannot be used from an evaluation.",
+  "sources": [
+    "fedramp_20x_vdr__vdr_evaluation"
+  ],
+  "targets": [
+    "compliance_core__compliance_evidence"
+  ],
+  "property_schema": {
+    "type": "object",
+    "required": ["factor", "basis"],
+    "additionalProperties": false,
+    "properties": {
+      "factor": {
+        "type": "string",
+        "enum": ["likely_exploitable", "internet_reachable"],
+        "description": "The factor this evidence supports. pain is refused in v0: no basis list for lowering PAIN exists."
+      },
+      "basis": {
+        "type": "string",
+        "enum": [
+          "code_not_present",
+          "code_not_reachable",
+          "requires_configuration",
+          "requires_dependency",
+          "requires_environment",
+          "protected_by_compiler",
+          "protected_at_runtime",
+          "protected_at_perimeter",
+          "protected_by_mitigating_control"
+        ],
+        "description": "Why the evidence supports the factor, from the closed list in data/evidence_basis.json."
+      },
+      "note": {
+        "type": "string",
+        "description": "Optional free text from the evaluator."
+      }
+    }
+  },
+  "identity": {
+    "discriminators": [
+      {
+        "path": "factor",
+        "description": "The factor the evidence supports, set by the evaluator. In the key because one evidence node can support both factors of one evaluation at the same time, and those are two relationships."
+      }
+    ]
+  },
+  "default_dimensions": {
+    "fedramp.rule": "vdr"
+  }
+}

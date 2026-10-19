@@ -1,0 +1,32 @@
+manifest_version = "0"
+plugin_version = "0.0.0" # x-release-please-version
+requires_tap = ">=0.3.0"
+slug = "fedramp_20x_vdr"
+name = "TAP FedRAMP 20x VDR"
+description = "Per-finding FedRAMP 20x Vulnerability Detection and Response evaluation (LEV, IRV, PAIN), the remediation timeframe tables as data, and the deadlines they imply."
+
+depends_on = [
+    { slug = "compliance_core", note = "vocabulary dependency: the evaluation edges target compliance_core__compliance_finding and compliance_core__compliance_evidence, and the VDR-max collector reads findings and their CONCERNS_COMPLIANCE_VULNERABILITY edges. Needs those types registered and boot-ordered ahead." },
+]
+
+# Pure Python, no cryptography and no native dependencies.
+[fips]
+status = "compatible"
+
+# One evaluation per finding, and one row per cell of FedRAMP's timeframe tables
+# (specs/spec-fedramp-20x-vdr-v0.md, req-fedramp-20x-vdr-evaluation and -timeframe).
+[models]
+fedramp_20x_vdr__vdr_evaluation = "tap_plugin.fedramp_20x_vdr.models.vdr_evaluation.VdrEvaluation"
+fedramp_20x_vdr__vdr_timeframe = "tap_plugin.fedramp_20x_vdr.models.vdr_timeframe.VdrTimeframe"
+
+[edges]
+EVALUATES_COMPLIANCE_FINDING__fedramp_20x_vdr = "edges/EVALUATES_COMPLIANCE_FINDING__fedramp_20x_vdr.edge.json"
+CITES_FACTOR_EVIDENCE__fedramp_20x_vdr = "edges/CITES_FACTOR_EVIDENCE__fedramp_20x_vdr.edge.json"
+
+[grift]
+timeframes = "grift/timeframes.grift.json"
+
+[[boot.records]]
+name = "ci"
+description = "RESERVED NAME (req-boot-bootstrap-ci-record): the stack this plugin's own tests run in — depends_on closure + self, offline, credential-free. The consumer flips self to editable."
+sha256 = "48dc432c4790394ffeea0f538266affd595e93b9b5b3a1315d29fdf2fa523cbd"

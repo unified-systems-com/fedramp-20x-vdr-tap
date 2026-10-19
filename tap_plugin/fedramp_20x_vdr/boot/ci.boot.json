@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "description": "fedramp_20x_vdr CI record (req-boot-bootstrap-ci-record, tap#365) — the stack this plugin's own tests run in, and the one claim per-plugin CI is allowed to make: that fedramp_20x_vdr is correct against the dependencies it DECLARES and nothing else. Install set is exactly the depends_on closure (compliance_core, pinned at its released tag v0.7.1) plus fedramp_20x_vdr itself, pinned at its release tag (the placeholder v0.0.0 until the first release, which release-please then advances); the consumer flips the self entry to editable so the CHECKOUT under test runs, not the pinned revision. Population seeds fedramp_20x_vdr (seed-only, offline). DELIBERATELY EXCLUDED: every other plugin, all credentials, all required_secrets, and any population step that reaches the network — so a fork can run this lane and a nightly cannot flake on a third party (req-boot-bootstrap-ci-record-5). Reproduce CI exactly: spawn --from 'git+https://github.com/unified-systems-com/fedramp-20x-vdr-tap@<release tag>#ci' --dev-plugins fedramp_20x_vdr",
+  "install": {
+    "plugins": [
+      {
+        "slug": "compliance_core",
+        "enabled": true,
+        "source": {
+          "type": "git",
+          "url": "https://github.com/unified-systems-com/compliance-core-tap",
+          "rev": "v0.7.1",
+          "commit": "7b8b7824535fd244e516cdc378b1a955d1a959af"
+        }
+      },
+      {
+        "slug": "fedramp_20x_vdr",
+        "enabled": true,
+        "source": {
+          "type": "git",
+          "url": "https://github.com/unified-systems-com/fedramp-20x-vdr-tap",
+          "rev": "v0.0.0"
+        }
+      }
+    ]
+  },
+  "population": {
+    "on_failure": "abort",
+    "steps": [
+      {
+        "type": "seed-plugin",
+        "plugin": "fedramp_20x_vdr",
+        "enabled": true,
+        "note": "Own GRIFT: seeding it proves the 53 timeframe rows import and satisfy the model schemas against a real registry."
+      }
+    ]
+  }
+}
