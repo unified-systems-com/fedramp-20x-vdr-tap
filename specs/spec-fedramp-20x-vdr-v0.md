@@ -48,7 +48,7 @@ FedRAMP's rules ask a provider to evaluate each detected vulnerability and then 
 | req-fedramp-20x-vdr-evidence | [Evidence For A Factor](#evidence-for-a-factor) | In Development | The evidence edge with its factor and basis, and the check that a factor is non-null only with one. |
 | req-fedramp-20x-vdr-timeframe | [Timeframe Rows](#timeframe-rows) | Implemented | `vdr_timeframe` and the seeded rows of the PVR tables, the evaluation deadlines and the acceptance limit. |
 | req-fedramp-20x-vdr-effective | [Worst-Case Semantics](#worst-case-semantics) | Proposed | What an unset factor and an unset class mean; computed, never stored. |
-| req-fedramp-20x-vdr-collector | [VDR-Max Collector](#vdr-max-collector) | Proposed | One derived collector that gives every open, vulnerability-linked finding an all-null evaluation. |
+| req-fedramp-20x-vdr-collector | [VDR-Max Collector](#vdr-max-collector) | Implemented | One derived collector that gives every open, vulnerability-linked finding an all-null evaluation. |
 | req-fedramp-20x-vdr-deadlines | [Deadlines](#deadlines) | Proposed | Evaluation deadline, remediation deadline, overdue and acceptance flags as Searches. Depends on Issue# 43 - compliance-core-tap and Issue# 1064 - tap. |
 | req-fedramp-20x-vdr-incidents | [Reportable Incidents](#reportable-incidents) | Proposed | The internet-reachable and non-internet-reachable incident rules as Searches. Ship condition: Gryphon must express the evidence test in one query (`-incidents-6`). |
 | req-fedramp-20x-vdr-nongoals | [v0 Non-Goals](#v0-non-goals) | Proposed | What v0 does not build. |
@@ -212,13 +212,15 @@ In a Search the null case is written as `IS NULL OR = <value>`; no stored column
 ----
 RID: `req-fedramp-20x-vdr-collector`
 
-Status: `Proposed`
+Status: `Implemented`
 
 The first stage starts from what the grid already holds. One derived collector reads the findings and writes an all-null evaluation for each, so that firing it once makes every current finding an entry at the worst case. Definition of done for v0: after one run, every open finding linked to a vulnerability has a `vdr_evaluation` with `likely_exploitable`, `internet_reachable` and `pain` all `null`. Whether there are several collectors, or one configurable collector, is a later decision.
 
 #### Implementation
 
-A `tap_cares` collector that reads through Gryphon: findings with `status` `open` that have a `CONCERNS_COMPLIANCE_VULNERABILITY` edge. For each such finding that has no evaluation it emits one `vdr_evaluation` (key from the finding; every factor, `evaluator`, `evaluated_at` and `rationale` absent) and the `EVALUATES_COMPLIANCE_FINDING` edge, in one GRIFT batch. It never emits a node for a finding that already has an evaluation, because an upsert of a node would overwrite fields a person set. Resolved findings keep their evaluation untouched. A finding with no vulnerability edge is not evaluated in v0 (ruled 2026-10-16).
+A `tap_cares` collector (`tap_plugin/fedramp_20x_vdr/collectors/vdr_max/collector.py`, registered as `vdr_max` under scope `fedramp_20x_vdr`) that reads through Gryphon: findings with `status` `open` that have a `CONCERNS_COMPLIANCE_VULNERABILITY` edge. For each such finding that has no evaluation it emits one `vdr_evaluation` (key from the finding; every factor, `evaluator`, `evaluated_at` and `rationale` absent) and the `EVALUATES_COMPLIANCE_FINDING` edge, in one GRIFT batch; the edge names its finding by natural key, so the collector handles no ids. A finding that has no `source` or `source_key` cannot be named, so it is skipped and counted in a warning, never defaulted. A Gryphon query that matches nothing returns the bare empty envelope with no `rows` key (observed 2026-10-19), which the collector reads as zero rows. It never emits a node for a finding that already has an evaluation, because an upsert of a node would overwrite fields a person set. Resolved findings keep their evaluation untouched. A finding with no vulnerability edge is not evaluated in v0 (ruled 2026-10-16).
+
+**Residual risk, observed 2026-10-19.** A GRIFT node sent under an existing natural key replaces the row: every field the node omits goes back to null (a test pins this). The collector therefore never sends a node for a key that already has an evaluation. Its read of the existing evaluations and its submit are not atomic, so an evaluation a person wrote in the milliseconds between them would be blanked. The collector reads the existing set last to keep that window short, it is the step-0 bootstrap that runs before anyone evaluates, and the overwritten values remain in the node's history; GRIFT offers no insert-only form that would close the window.
 
 The collector needs no credentials and makes no external call.
 
@@ -226,11 +228,13 @@ The collector needs no credentials and makes no external call.
 
 | ACID | Title | Status | Description | Notes |
 | --- | --- | :---: | --- | --- |
-| req-fedramp-20x-vdr-collector-1 | Every Linked Open Finding | Proposed | On a grid with no evaluations, after one run every open finding linked to a vulnerability has exactly one evaluation, each with all three factors `null`. | The v0 definition of done. On a grid that already has evaluations, a run adds one only for each open linked finding without one and changes none (`-2`, `-3`). |
-| req-fedramp-20x-vdr-collector-2 | Idempotent | Proposed | A second run emits nothing and changes no node. | |
-| req-fedramp-20x-vdr-collector-3 | Never Overwrites | Proposed | An evaluation with a factor, `evaluator` or `evaluated_at` set is not re-emitted by a later run. | |
-| req-fedramp-20x-vdr-collector-4 | Unlinked Findings Skipped | Proposed | An open finding with no vulnerability edge receives no evaluation. | |
-| req-fedramp-20x-vdr-collector-5 | Writes Through GRIFT | Proposed | The collector submits one GRIFT batch and aborts on rejection. | |
+| req-fedramp-20x-vdr-collector-1 | Every Linked Open Finding | Implemented | On a grid with no evaluations, after one run every open finding linked to a vulnerability has exactly one evaluation, each with all three factors `null`. | The v0 definition of done. On a grid that already has evaluations, a run adds one only for each open linked finding without one and changes none (`-2`, `-3`). |
+| req-fedramp-20x-vdr-collector-2 | Idempotent | Implemented | A second run emits nothing and changes no node. | |
+| req-fedramp-20x-vdr-collector-3 | Never Overwrites | Implemented | An evaluation with a factor, `evaluator` or `evaluated_at` set is not re-emitted by a later run. | |
+| req-fedramp-20x-vdr-collector-4 | Unlinked Findings Skipped | Implemented | An open finding with no vulnerability edge receives no evaluation. | |
+| req-fedramp-20x-vdr-collector-5 | Writes Through GRIFT | Implemented | The collector submits one GRIFT batch and aborts on rejection. | |
+| req-fedramp-20x-vdr-collector-7 | Disagreeing Reads Stop The Run | Implemented | If the set of connected evaluations holds a key the set of existing evaluations lacks, which cannot be true, the run records `INCONSISTENT_READ`, fails and submits nothing; a Gryphon read that raises fails the run likewise. | An empty-looking "existing" read is the one way the no-overwrite guard could fail open. Found in review of PR# 5. |
+| req-fedramp-20x-vdr-collector-6 | Reconnects An Edge-Less Evaluation | Implemented | An evaluation that exists but has no `EVALUATES_COMPLIANCE_FINDING` edge, for an open linked finding, gets that edge and nothing else; its node is not re-sent. | Every Search traverses the edge. Found in review of PR# 5. |
 
 ### Deadlines
 ----
