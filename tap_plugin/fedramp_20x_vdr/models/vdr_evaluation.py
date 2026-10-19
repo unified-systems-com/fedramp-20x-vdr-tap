@@ -119,8 +119,8 @@ class VdrEvaluation(BaseModel):
         default=None,
         help_text="When the evaluation was made. Null = not yet evaluated.",
     )
-    rationale = models.TextField(
-        null=True,  # noqa: DJ001  (req-fedramp-20x-vdr-evaluation-2)
+    rationale = models.TextField(  # noqa: DJ001  (req-fedramp-20x-vdr-evaluation-2)
+        null=True,
         blank=True,
         default=None,
         help_text="Why, in the evaluator's words. Null = unobserved.",

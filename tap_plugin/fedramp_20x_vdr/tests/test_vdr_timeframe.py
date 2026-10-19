@@ -82,8 +82,16 @@ class TestSeedContent:
 
     def test_class_a_and_b_are_identical_on_the_page_and_both_seeded(self) -> None:
         rows = _rows()
-        a = {(r["pain"], r["exposure"]): r["hours"] for r in rows if r["rule"] == "VDR-TFR-PVR" and r["fedramp_class"] == "a"}
-        b = {(r["pain"], r["exposure"]): r["hours"] for r in rows if r["rule"] == "VDR-TFR-PVR" and r["fedramp_class"] == "b"}
+        a = {
+            (r["pain"], r["exposure"]): r["hours"]
+            for r in rows
+            if r["rule"] == "VDR-TFR-PVR" and r["fedramp_class"] == "a"
+        }
+        b = {
+            (r["pain"], r["exposure"]): r["hours"]
+            for r in rows
+            if r["rule"] == "VDR-TFR-PVR" and r["fedramp_class"] == "b"
+        }
         assert a == b and len(a) == 12
 
     def test_the_worst_case_row_is_a_bound(self) -> None:
@@ -117,8 +125,10 @@ class TestSeedImport:
 
     def test_a_row_reads_back_with_its_display_name_and_dimension(self) -> None:
         grift_import(json.loads((PACKAGE / "grift" / "timeframes.grift.json").read_text(encoding="utf-8")))
-        row = get_model_class(TYPE).objects.live().get(
-            rule="VDR-TFR-PVR", fedramp_class="d", pain="N5", exposure="lev_irv"
+        row = (
+            get_model_class(TYPE)
+            .objects.live()
+            .get(rule="VDR-TFR-PVR", fedramp_class="d", pain="N5", exposure="lev_irv")
         )
         row.entity.refresh_from_db()
         assert row.hours == 12

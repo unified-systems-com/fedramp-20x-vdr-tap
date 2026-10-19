@@ -75,7 +75,9 @@ class VdrTimeframe(BaseModel):
     hours = models.PositiveIntegerField(
         null=True, blank=True, default=None, help_text="The interval in whole hours, converted exactly from canon_cell."
     )
-    canon_cell = models.CharField(max_length=64, blank=True, default="", help_text="The page cell, as the page states it.")
+    canon_cell = models.CharField(
+        max_length=64, blank=True, default="", help_text="The page cell, as the page states it."
+    )
     canon_read_at = models.DateField(null=True, blank=True, default=None, help_text="The date the page was read.")
     canon_url = models.CharField(max_length=512, blank=True, default="", help_text="The page the cell comes from.")
 

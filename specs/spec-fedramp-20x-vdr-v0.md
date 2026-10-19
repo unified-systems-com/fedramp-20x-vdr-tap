@@ -44,9 +44,9 @@ FedRAMP's rules ask a provider to evaluate each detected vulnerability and then 
 
 | RID | Name | Status | Notes |
 | --- | --- | :---: | --- |
-| req-fedramp-20x-vdr-evaluation | [Evaluation](#evaluation) | Proposed | `vdr_evaluation`, one per finding, factors null by default; the `EVALUATES_COMPLIANCE_FINDING` edge. |
-| req-fedramp-20x-vdr-evidence | [Evidence For A Factor](#evidence-for-a-factor) | Proposed | The evidence edge with its factor and basis, and the check that a factor is non-null only with one. |
-| req-fedramp-20x-vdr-timeframe | [Timeframe Rows](#timeframe-rows) | Proposed | `vdr_timeframe` and the seeded rows of the PVR tables, the evaluation deadlines and the acceptance limit. |
+| req-fedramp-20x-vdr-evaluation | [Evaluation](#evaluation) | In Development | `vdr_evaluation`, one per finding, factors null by default; the `EVALUATES_COMPLIANCE_FINDING` edge. |
+| req-fedramp-20x-vdr-evidence | [Evidence For A Factor](#evidence-for-a-factor) | In Development | The evidence edge with its factor and basis, and the check that a factor is non-null only with one. |
+| req-fedramp-20x-vdr-timeframe | [Timeframe Rows](#timeframe-rows) | Implemented | `vdr_timeframe` and the seeded rows of the PVR tables, the evaluation deadlines and the acceptance limit. |
 | req-fedramp-20x-vdr-effective | [Worst-Case Semantics](#worst-case-semantics) | Proposed | What an unset factor and an unset class mean; computed, never stored. |
 | req-fedramp-20x-vdr-collector | [VDR-Max Collector](#vdr-max-collector) | Proposed | One derived collector that gives every open, vulnerability-linked finding an all-null evaluation. |
 | req-fedramp-20x-vdr-deadlines | [Deadlines](#deadlines) | Proposed | Evaluation deadline, remediation deadline, overdue and acceptance flags as Searches. Depends on Issue# 43 - compliance-core-tap and Issue# 1064 - tap. |
@@ -66,7 +66,7 @@ FedRAMP's rules ask a provider to evaluate each detected vulnerability and then 
 ----
 RID: `req-fedramp-20x-vdr-evaluation`
 
-Status: `Proposed`
+Status: `In Development`
 
 A `vdr_evaluation` is the plugin's answer for one finding: how likely it is to be exploited, whether the internet can reach it, and how badly an agency could be hurt. FedRAMP's evaluation rules (VER-EVA-ELX, VER-EVA-EIR, VER-EVA-EPA) ask for exactly these three outputs. The evaluation is a node rather than fields on the finding because it is a judgement made by a party at a time, with a rationale and evidence, while `compliance_finding` records an observation by a scanner.
 
@@ -92,10 +92,10 @@ The identity mirrors the finding's identity so that an evaluation is found again
 
 | ACID | Title | Status | Description | Notes |
 | --- | --- | :---: | --- | --- |
-| req-fedramp-20x-vdr-evaluation-1 | Keyed By The Finding | Proposed | `vdr_evaluation` declares `NATURAL_KEY = ("finding_source", "finding_source_key")`; two writes for one finding are one node. | |
-| req-fedramp-20x-vdr-evaluation-2 | Null Is Unobserved | Proposed | A factor, `evaluator`, `evaluated_at` or `rationale` that no writer set is stored as `null`, never as `false`, `N5` or an empty string. | |
-| req-fedramp-20x-vdr-evaluation-3 | Values Are Checked | Proposed | `pain` outside `N0` to `N5`, a non-boolean factor, or an `evaluated_at` that is not a date-time is refused. | |
-| req-fedramp-20x-vdr-evaluation-6 | Pain Stays Null In v0 | Proposed | A write that sets `pain` to a non-null value is refused in v0, because no PAIN evidence edge can exist (`req-fedramp-20x-vdr-evidence-6`); the refusal is lifted when the PAIN basis list is specified. | Write-time enforcement is possible here because it needs no edge. |
+| req-fedramp-20x-vdr-evaluation-1 | Keyed By The Finding | Implemented | `vdr_evaluation` declares `NATURAL_KEY = ("finding_source", "finding_source_key")`; two writes for one finding are one node. | |
+| req-fedramp-20x-vdr-evaluation-2 | Null Is Unobserved | Implemented | A factor, `evaluator`, `evaluated_at` or `rationale` that no writer set is stored as `null`, never as `false`, `N5` or an empty string. | |
+| req-fedramp-20x-vdr-evaluation-3 | Values Are Checked | Implemented | `pain` outside `N0` to `N5`, a non-boolean factor, or an `evaluated_at` that is not a date-time is refused. | |
+| req-fedramp-20x-vdr-evaluation-6 | Pain Stays Null In v0 | Implemented | A write that sets `pain` to a non-null value is refused in v0, because no PAIN evidence edge can exist (`req-fedramp-20x-vdr-evidence-6`); the refusal is lifted when the PAIN basis list is specified. | Write-time enforcement is possible here because it needs no edge. |
 | req-fedramp-20x-vdr-evaluation-4 | Key Matches The Finding | Proposed | A check reports any evaluation whose key differs from the key of the finding it evaluates. | Detection after the fact: an edge cannot be validated against a node's fields at write time. |
 | req-fedramp-20x-vdr-evaluation-5 | One Per Finding | Proposed | A check reports any finding with more than one `EVALUATES_COMPLIANCE_FINDING` edge pointing at it. | |
 
@@ -103,7 +103,7 @@ The identity mirrors the finding's identity so that an evaluation is found again
 ----
 RID: `req-fedramp-20x-vdr-evidence`
 
-Status: `Proposed`
+Status: `In Development`
 
 A factor is lowered only by evidence. The evidence is a `compliance_evidence` node from compliance_core, which already means "something that supports a verdict", and an edge from the evaluation says which factor it supports and on what basis. FedRAMP's own rule points the same way: VER-EVA-AIA says to assume exploitation can be automated unless there is evidence proving otherwise.
 
@@ -119,7 +119,7 @@ A factor is lowered only by evidence. The evidence is a `compliance_evidence` no
 
 Identity declares `{"discriminators": ["factor"]}`: one evidence node may support two factors of one evaluation, and those are two edges.
 
-`data/evidence_basis.json` ships with a JSON Schema and a `description` at the top and on every entry. Its first content is the nine justification values of the CycloneDX 1.6 vulnerability analysis (`code_not_present`, `code_not_reachable`, `requires_configuration`, `requires_dependency`, `requires_environment`, `protected_by_compiler`, `protected_at_runtime`, `protected_at_perimeter`, `protected_by_mitigating_control`). They were designed for "not affected" and fit the likely-exploitable and internet-reachable factors; bases for lowering `pain` are not yet specified and are an open item. Extending the list changes data, not the model.
+`data/evidence_basis.json` ships with a JSON Schema and a `description` at the top and on every entry. Its first content is the nine justification values of the CycloneDX 1.6 vulnerability analysis (`code_not_present`, `code_not_reachable`, `requires_configuration`, `requires_dependency`, `requires_environment`, `protected_by_compiler`, `protected_at_runtime`, `protected_at_perimeter`, `protected_by_mitigating_control`). They were designed for "not affected" and fit the likely-exploitable and internet-reachable factors; bases for lowering `pain` are not yet specified and are an open item. The `basis` property of the edge definition carries the same keys as an enum, because an edge property schema cannot read a data file, and a test pins the two equal. Extending the list is an edit to those two data files, never to code.
 
 **What the edge proves and what it does not.** The model enforces that evidence exists, names the factor, and carries a basis from a closed list; a check also requires that the evidence is cited by the evaluated finding itself through `CITES_COMPLIANCE_EVIDENCE`, so evidence about nothing in particular cannot be attached to an unrelated finding (`req-fedramp-20x-vdr-evidence-5`). That the evidence supports the chosen value is **human-attested**: the `evaluator` who set the factor vouches for it, and the edge records what they relied on. The plugin does not claim to verify the substance of evidence.
 
@@ -129,18 +129,18 @@ The check (`req-fedramp-20x-vdr-evidence-3`) is a Gryphon query run as a test an
 
 | ACID | Title | Status | Description | Notes |
 | --- | --- | :---: | --- | --- |
-| req-fedramp-20x-vdr-evidence-1 | Factor And Basis Required | Proposed | An evidence edge without `factor`, or with a `factor` or `basis` outside the lists, is refused. | |
-| req-fedramp-20x-vdr-evidence-2 | One Edge Per Factor | Proposed | The same evidence node cited for two factors of one evaluation is two edges; cited twice for one factor is one. | |
+| req-fedramp-20x-vdr-evidence-1 | Factor And Basis Required | Implemented | An evidence edge without `factor`, or with a `factor` or `basis` outside the lists, is refused. | |
+| req-fedramp-20x-vdr-evidence-2 | One Edge Per Factor | Implemented | The same evidence node cited for two factors of one evaluation is two edges; cited twice for one factor is one. | |
 | req-fedramp-20x-vdr-evidence-3 | Unsupported Factor Reported | Proposed | The check returns every evaluation with a non-null factor lacking an evidence edge for that factor, and every one with a non-null factor and a null `evaluator` or `evaluated_at`. | Detection after the fact; write-time enforcement is not possible because the node and its edges arrive in one batch. |
 | req-fedramp-20x-vdr-evidence-5 | Evidence Belongs To The Finding | Proposed | A check returns every `CITES_FACTOR_EVIDENCE` target that the evaluated finding does not also cite through `CITES_COMPLIANCE_EVIDENCE`. | Relevance of the evidence to the value is attested by the evaluator, not verified. |
-| req-fedramp-20x-vdr-evidence-6 | Pain Edges Refused In v0 | Proposed | A `CITES_FACTOR_EVIDENCE` edge with `factor` of `pain` is refused until a basis list for PAIN is specified. | |
-| req-fedramp-20x-vdr-evidence-4 | Basis List Is Data | Proposed | `data/evidence_basis.json` validates against its schema at load, and a basis is added without a code change. | |
+| req-fedramp-20x-vdr-evidence-6 | Pain Edges Refused In v0 | Implemented | A `CITES_FACTOR_EVIDENCE` edge with `factor` of `pain` is refused until a basis list for PAIN is specified. | |
+| req-fedramp-20x-vdr-evidence-4 | Basis List Is Data | Implemented | `data/evidence_basis.json` validates against its schema, and a basis is added by editing data: the list and the `basis` enum of the edge definition `CITES_FACTOR_EVIDENCE__fedramp_20x_vdr.edge.json`, which a test pins equal. | The edge definition's enum is the enforced copy because an edge property schema cannot read a data file; no Python changes. Tests: `test_vdr_timeframe.py::TestEvidenceBasisList`. |
 
 ### Timeframe Rows
 ----
 RID: `req-fedramp-20x-vdr-timeframe`
 
-Status: `Proposed`
+Status: `Implemented`
 
 FedRAMP states its deadlines as tables. The plugin seeds each cell of those tables as a `vdr_timeframe` row that cites the rule and the date the page was read, so a changed table is a changed seed file and a reader can check any row against the source.
 
@@ -167,11 +167,11 @@ The seed is a GRIFT bundle in `grift/`, imported by `import_plugin_grift`, and a
 
 | ACID | Title | Status | Description | Notes |
 | --- | --- | :---: | --- | --- |
-| req-fedramp-20x-vdr-timeframe-1 | Keyed By The Cell | Proposed | `vdr_timeframe` declares the key above; re-seeding is a no-op. | |
-| req-fedramp-20x-vdr-timeframe-2 | Fifty-Three Rows | Proposed | The seed holds exactly 48 PVR rows, 4 EVU rows and 1 MAV row. | |
-| req-fedramp-20x-vdr-timeframe-3 | Hours Match The Canon | Proposed | For every row, `hours` equals `canon_cell` converted exactly (days times 24, hours as stated). | |
-| req-fedramp-20x-vdr-timeframe-4 | No Invented Rows | Proposed | No row exists for `pain` of `N0` or `N1`. | |
-| req-fedramp-20x-vdr-timeframe-5 | Rows Cite Their Source | Proposed | Every row carries a non-empty `canon_cell`, `canon_read_at` and `canon_url`. | |
+| req-fedramp-20x-vdr-timeframe-1 | Keyed By The Cell | Implemented | `vdr_timeframe` declares the key above; re-seeding is a no-op. | |
+| req-fedramp-20x-vdr-timeframe-2 | Fifty-Three Rows | Implemented | The seed holds exactly 48 PVR rows, 4 EVU rows and 1 MAV row. | |
+| req-fedramp-20x-vdr-timeframe-3 | Hours Match The Canon | Implemented | For every row, `hours` equals `canon_cell` converted exactly (days times 24, hours as stated). | |
+| req-fedramp-20x-vdr-timeframe-4 | No Invented Rows | Implemented | No row exists for `pain` of `N0` or `N1`. | |
+| req-fedramp-20x-vdr-timeframe-5 | Rows Cite Their Source | Implemented | Every row carries a non-empty `canon_cell`, `canon_read_at` and `canon_url`. | |
 
 ### Worst-Case Semantics
 ----
@@ -206,7 +206,7 @@ In a Search the null case is written as `IS NULL OR = <value>`; no stored column
 | req-fedramp-20x-vdr-effective-4 | Setting A Factor Never Removes A Deadline | Proposed | An evaluation with any factor set, with or without evidence, still appears in every deadline Search with the worst-case row applied, and is also listed in the "evaluated" Search with its deadline marked as the worst-case bound. | Closes the fail-open path found in review of the first draft. |
 | req-fedramp-20x-vdr-effective-6 | Evidence Makes A Factor Count | Proposed | In every incident Search, a non-null factor reads as `null` unless all three hold: an evidence edge for that factor exists, the evaluated finding also cites that evidence through `CITES_COMPLIANCE_EVIDENCE`, and `evaluator` and `evaluated_at` are set. | See `req-fedramp-20x-vdr-incidents-5` and `req-fedramp-20x-vdr-evidence-5`, which is part of this test and not only an audit. Test: only the factor edge exists, and the factor still reads as `null`. |
 | req-fedramp-20x-vdr-effective-7 | Raw Factors Are Not Answers | Proposed | Shipped pages, panels and Searches read the effective values only through the shipped Searches; none reads a `vdr_evaluation` factor field directly. | A review item for every consumer. |
-| req-fedramp-20x-vdr-effective-5 | Worst Case Is A Bound | Proposed | A test over the seeded rows shows that, for every class, lowering PAIN or moving the exposure from `lev_irv` toward `nlev` never shortens `hours`. | Observed property of the tables as read; the test fails if a future table breaks it. |
+| req-fedramp-20x-vdr-effective-5 | Worst Case Is A Bound | Implemented | A test over the seeded rows shows that, for every class, lowering PAIN or moving the exposure from `lev_irv` toward `nlev` never shortens `hours`. | Observed property of the tables as read; the test fails if a future table breaks it. |
 
 ### VDR-Max Collector
 ----

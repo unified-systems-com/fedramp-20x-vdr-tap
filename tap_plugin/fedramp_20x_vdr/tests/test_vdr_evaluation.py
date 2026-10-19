@@ -30,8 +30,17 @@ EVIDENCE = "compliance_core__compliance_evidence"
 EVALUATES = "EVALUATES_COMPLIANCE_FINDING__fedramp_20x_vdr"
 CITES = "CITES_FACTOR_EVIDENCE__fedramp_20x_vdr"
 
-FINDING_PAYLOAD = {"source": "github_core", "source_key": "unified-systems-com/tap#code_scanning#7", "name": "CVE-2026-1"}
-EVIDENCE_PAYLOAD = {"source": "test", "source_key": "evidence-1", "name": "WAF rule blocks the payload"}
+FINDING_PAYLOAD = {
+    "source": "github_core",
+    "source_key": "unified-systems-com/tap#code_scanning#7",
+    "name": "CVE-2026-1",
+}
+EVIDENCE_PAYLOAD = {
+    "source": "test",
+    "source_key": "evidence-1",
+    "name": "WAF rule blocks the payload",
+    "kind": "screenshot",
+}
 EVALUATION_PAYLOAD = {
     "finding_source": FINDING_PAYLOAD["source"],
     "finding_source_key": FINDING_PAYLOAD["source_key"],
@@ -166,7 +175,9 @@ class TestEdges:
             "evaluation": _create(EVALUATION, EVALUATION_PAYLOAD),
             "finding": _create(FINDING, FINDING_PAYLOAD),
             "evidence": _create(EVIDENCE, EVIDENCE_PAYLOAD),
-            "other": _create("compliance_core__compliance_boundary", {"name": "boundary", "source": "t", "source_key": "b"}),
+            "other": _create(
+                "compliance_core__compliance_boundary", {"name": "boundary", "source": "t", "source_key": "b"}
+            ),
         }
 
     def test_an_evaluation_evaluates_a_finding_and_takes_the_dimension(self) -> None:
@@ -174,15 +185,42 @@ class TestEdges:
         edge = create_edge(n["evaluation"].entity, n["finding"].entity, EVALUATES)
         assert edge.entity.dimensions.get("fedramp.rule") == "vdr"
 
-    def test_an_evaluation_cannot_evaluate_anything_but_a_finding(self) -> None:
+    # The grid permits an edge when EITHER endpoint's declaration or the edge type's sources and
+    # targets allow it, and an endpoint that declares nothing (compliance_core's finding, evidence
+    # and boundary) allows everything. So what these types can refuse is the edges that point AT an
+    # evaluation or a timeframe, which both declare closed.
+    @pytest.mark.parametrize(
+        ("src", "edge", "props"),
+        [
+            ("finding", EVALUATES, {}),
+            ("evidence", CITES, {"factor": "likely_exploitable", "basis": "code_not_present"}),
+            ("other", EVALUATES, {}),
+        ],
+    )
+    def test_nothing_points_at_an_evaluation(self, src: str, edge: str, props: dict[str, Any]) -> None:
+        """INBOUND_EDGES = []: an evaluation is judged from outside by nobody."""
         n = self._nodes()
         with pytest.raises(InvalidEdgeError):
-            create_edge(n["evaluation"].entity, n["other"].entity, EVALUATES)
+            create_edge(n[src].entity, n["evaluation"].entity, edge, properties=props)
 
-    def test_only_an_evaluation_evaluates(self) -> None:
+    def test_a_timeframe_takes_and_draws_no_edge(self) -> None:
+        """A timeframe row is reference data: it is looked up, never wired."""
         n = self._nodes()
+        row = _create(
+            "fedramp_20x_vdr__vdr_timeframe",
+            {
+                "rule": "VER-TFR-MAV",
+                "fedramp_class": "all",
+                "hours": 4608,
+                "canon_cell": "192 days",
+                "canon_read_at": "2026-10-16",
+                "canon_url": "https://www.fedramp.gov/2026/reference/vulnerability-evaluation-and-reporting/",
+            },
+        )
         with pytest.raises(InvalidEdgeError):
-            create_edge(n["evidence"].entity, n["finding"].entity, EVALUATES)
+            create_edge(row.entity, n["finding"].entity, EVALUATES)
+        with pytest.raises(InvalidEdgeError):
+            create_edge(n["evaluation"].entity, row.entity, EVALUATES)
 
     def test_evidence_is_cited_with_a_factor_and_a_basis(self) -> None:
         """req-fedramp-20x-vdr-evidence-1."""
@@ -213,16 +251,6 @@ class TestEdges:
         n = self._nodes()
         with pytest.raises(Exception, match=r"(?i)propert|schema|valid|required"):
             create_edge(n["evaluation"].entity, n["evidence"].entity, CITES, properties=bad)
-
-    def test_evidence_cannot_be_cited_from_a_finding_through_this_edge(self) -> None:
-        n = self._nodes()
-        with pytest.raises(InvalidEdgeError):
-            create_edge(
-                n["finding"].entity,
-                n["evidence"].entity,
-                CITES,
-                properties={"factor": "likely_exploitable", "basis": "code_not_present"},
-            )
 
     def test_one_evidence_node_can_support_both_factors_as_two_edges(self) -> None:
         """req-fedramp-20x-vdr-evidence-2: the factor is the discriminator."""
