@@ -146,7 +146,7 @@ class TestRun:
 class TestFloor:
     @pytest.mark.spec("req-fedramp-20x-vdr-coverage-snapshot-6")
     def test_the_ci_record_pins_a_compliance_core_that_ships_the_base_class(self) -> None:
-        record = json.loads((Path(vdr.__file__).parent / "boot" / "ci.boot.json").read_text())
+        record = json.loads((Path(__file__).parent.parent / "boot" / "ci.boot.json").read_text())
         pinned = next(p for p in record["install"]["plugins"] if p["slug"] == "compliance_core")["source"]["rev"]
         version = tuple(int(part) for part in pinned.removeprefix("v").split("."))
         assert version >= (0, 8, 7), f"compliance_core {pinned} predates SearchSnapshotCollector (first shipped in v0.8.7)"
