@@ -1,0 +1,1 @@
+"""The coverage snapshot collector."""

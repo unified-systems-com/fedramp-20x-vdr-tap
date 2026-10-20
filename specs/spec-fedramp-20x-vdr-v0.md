@@ -49,7 +49,7 @@ FedRAMP's rules ask a provider to evaluate each detected vulnerability and then 
 | req-fedramp-20x-vdr-timeframe | [Timeframe Rows](#timeframe-rows) | Implemented | `vdr_timeframe` and the seeded rows of the PVR tables, the evaluation deadlines and the acceptance limit. |
 | req-fedramp-20x-vdr-effective | [Worst-Case Semantics](#worst-case-semantics) | Proposed | What an unset factor and an unset class mean; computed, never stored. |
 | req-fedramp-20x-vdr-collector | [VDR-Max Collector](#vdr-max-collector) | Implemented | One derived collector that gives every open, vulnerability-linked finding an all-null evaluation. |
-| req-fedramp-20x-vdr-coverage-snapshot | [Coverage Snapshot Collector](#coverage-snapshot-collector) | Proposed | One derived collector, a subclass of compliance_core's `SearchSnapshotCollector`, that records the classification-mapping summary hourly as a `compliance_search_snapshot`. |
+| req-fedramp-20x-vdr-coverage-snapshot | [Coverage Snapshot Collector](#coverage-snapshot-collector) | Implemented | One derived collector, a subclass of compliance_core's `SearchSnapshotCollector`, that records the classification-mapping summary hourly as a `compliance_search_snapshot`. |
 | req-fedramp-20x-vdr-deadlines | [Deadlines](#deadlines) | Proposed | Evaluation deadline, remediation deadline, overdue and acceptance flags as Searches. Depends on Issue# 43 - compliance-core-tap and Issue# 1064 - tap. |
 | req-fedramp-20x-vdr-incidents | [Reportable Incidents](#reportable-incidents) | Proposed | The internet-reachable and non-internet-reachable incident rules as Searches. Ship condition: Gryphon must express the evidence test in one query (`-incidents-6`). |
 | req-fedramp-20x-vdr-nongoals | [v0 Non-Goals](#v0-non-goals) | Proposed | What v0 does not build. |
@@ -241,7 +241,7 @@ The collector needs no credentials and makes no external call.
 ----
 RID: `req-fedramp-20x-vdr-coverage-snapshot`
 
-Status: `Proposed`
+Status: `Implemented`
 
 The classification mapping (`req-compliance-core-dimension-mapping`) says how much of the inventory carries the data classification it should, and an auditor wants that figure over time, not once. This plugin records it. A second derived collector, `coverage_snapshot`, runs the mapping-summary Search on a schedule and stores the rows as a `compliance_search_snapshot` (`req-compliance-core-search-snapshot`). The plugin owns this because the coverage figure is what its VDR work reports against; the Search it records belongs to the demo project and is seeded there.
 
@@ -268,12 +268,12 @@ This is the first collector of the "run a Search on a schedule and keep the resu
 
 | ACID | Title | Status | Description | Notes |
 | --- | --- | :---: | --- | --- |
-| req-fedramp-20x-vdr-coverage-snapshot-1 | Subclass Of The Base | Proposed | `CoverageSnapshotCollector` subclasses `SearchSnapshotCollector`, sets `SOURCE` to `fedramp_20x_vdr` and `SEARCH_ENTITY_IDS` to the one id above, and defines no `run()` of its own. | |
-| req-fedramp-20x-vdr-coverage-snapshot-2 | Registered | Proposed | `coverage_snapshot` is registered under scope `fedramp_20x_vdr` at `ready()`, with a name and a description, and reconciles to one `Collector` node. | |
-| req-fedramp-20x-vdr-coverage-snapshot-3 | One Snapshot Per Run | Proposed | On a grid holding that Search, one run writes one `compliance_search_snapshot` with `source` `fedramp_20x_vdr` and an edge `CAPTURES_SEARCH` to the Search, and a second run writes a second snapshot, not a replacement. | |
-| req-fedramp-20x-vdr-coverage-snapshot-4 | Missing Search Fails Clearly | Proposed | On a grid without the Search the run fails with an error naming the id and writes nothing. | |
-| req-fedramp-20x-vdr-coverage-snapshot-5 | Same Id As The Seed | Proposed | The id in the subclass equals the entity id the playground's seed gives the Search; a test in this plugin pins the id, which shows a change made here. | The pin is one-sided: the playground is a separate repository, so a change to its seed is not seen by this test. Drift there is caught by the hourly run failing with the id named (criterion 4), and the playground's own tests should pin the same literal, which is that repository's requirement to record, not this one's. |
-| req-fedramp-20x-vdr-coverage-snapshot-6 | Dependency Floor | Proposed | `depends_on` for `compliance_core` and the dependency floor name the first release that ships `SearchSnapshotCollector`. | |
+| req-fedramp-20x-vdr-coverage-snapshot-1 | Subclass Of The Base | Implemented | `CoverageSnapshotCollector` subclasses `SearchSnapshotCollector`, sets `SOURCE` to `fedramp_20x_vdr` and `SEARCH_ENTITY_IDS` to the one id above, and defines no `run()` of its own. | |
+| req-fedramp-20x-vdr-coverage-snapshot-2 | Registered | Implemented | `coverage_snapshot` is registered under scope `fedramp_20x_vdr` at `ready()`, with a name and a description, and reconciles to one `Collector` node. | |
+| req-fedramp-20x-vdr-coverage-snapshot-3 | One Snapshot Per Run | Implemented | On a grid holding that Search, one run writes one `compliance_search_snapshot` with `source` `fedramp_20x_vdr` and an edge `CAPTURES_SEARCH` to the Search, and a second run writes a second snapshot, not a replacement. | |
+| req-fedramp-20x-vdr-coverage-snapshot-4 | Missing Search Fails Clearly | Implemented | On a grid without the Search the run fails with an error naming the id and writes nothing. | |
+| req-fedramp-20x-vdr-coverage-snapshot-5 | Same Id As The Seed | Implemented | The id in the subclass equals the entity id the playground's seed gives the Search; a test in this plugin pins the id, which shows a change made here. | The pin is one-sided: the playground is a separate repository, so a change to its seed is not seen by this test. Drift there is caught by the hourly run failing with the id named (criterion 4), and the playground's own tests should pin the same literal, which is that repository's requirement to record, not this one's. |
+| req-fedramp-20x-vdr-coverage-snapshot-6 | Dependency Floor | Implemented | `depends_on` for `compliance_core` and the dependency floor name the first release that ships `SearchSnapshotCollector`. | |
 
 ### Deadlines
 ----
