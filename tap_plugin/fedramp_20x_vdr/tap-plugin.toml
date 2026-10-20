@@ -29,4 +29,4 @@ timeframes = "grift/timeframes.grift.json"
 [[boot.records]]
 name = "ci"
 description = "RESERVED NAME (req-boot-bootstrap-ci-record): the stack this plugin's own tests run in — depends_on closure + self, offline, credential-free. The consumer flips self to editable."
-sha256 = "cec852611eb8fee58025d2ecef57c6ad2f0144db0c64eb46abf653b072ae4142"
+sha256 = "5b6ff508dd84f2fd12b57739d38e47ac866b323958fd97d697bda2d988f20660"
