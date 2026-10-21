@@ -162,6 +162,7 @@ class TestWhatItLeavesAlone:
             {
                 "finding_source": "github_core",
                 "finding_source_key": "mine",
+                "scheme": "max",
                 "likely_exploitable": False,
                 "evaluator": "a.reviewer",
                 "evaluated_at": "2026-10-19T09:00:00+00:00",
@@ -188,7 +189,7 @@ class TestWhatItLeavesAlone:
         finding = _finding("orphan")
         orphan = create_node(
             EVALUATION,
-            {"finding_source": "github_core", "finding_source_key": "orphan", "rationale": "typed by hand"},
+            {"finding_source": "github_core", "finding_source_key": "orphan", "scheme": "max", "rationale": "typed by hand"},
         )
         assert orphan.success, orphan.errors
         assert not Edge.objects.filter(edge_type=EVALUATES).exists()

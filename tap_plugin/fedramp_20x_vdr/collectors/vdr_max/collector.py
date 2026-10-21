@@ -31,6 +31,11 @@ EVALUATION_TYPE = "fedramp_20x_vdr__vdr_evaluation"
 EVALUATES_EDGE = "EVALUATES_COMPLIANCE_FINDING__fedramp_20x_vdr"
 BATCH_SOURCE = "plugins.fedramp_20x_vdr.collectors.vdr_max"
 
+#: The scheme this collector writes and reads (`req-fedramp-20x-vdr-collector-8`). An evaluation of any other scheme
+#: is another algorithm's and is never counted, reconnected or touched (`-9`).
+SCHEME = "max"
+DIMENSIONS = {"fedramp.rule": "vdr", "vdr.scheme": SCHEME}
+
 #: Open findings that concern a vulnerability. A finding with no vulnerability edge is not evaluated
 #: in v0 (ruled 2026-10-16), and a resolved one is history. One row per finding and vulnerability
 #: edge, so a finding linked to two vulnerabilities appears twice and is de-duplicated below.
@@ -42,9 +47,11 @@ OPEN_LINKED_FINDINGS = (
     "RETURN f.data.source AS source, f.data.source_key AS source_key"
 )
 
-#: Every evaluation on the grid, whatever its factors say: a person's evaluation is never touched.
+#: Every `max` evaluation on the grid, whatever its factors say: a person's evaluation is never touched, and an
+#: evaluation of another scheme is not this collector's to count.
 EXISTING_EVALUATIONS = (
     "MATCH (e:fedramp_20x_vdr__vdr_evaluation) "
+    'WHERE e.data.scheme = "max" '
     "RETURN e.data.finding_source AS source, e.data.finding_source_key AS source_key"
 )
 
@@ -53,6 +60,7 @@ EXISTING_EVALUATIONS = (
 CONNECTED_EVALUATIONS = (
     "MATCH (e:fedramp_20x_vdr__vdr_evaluation)-[:EVALUATES_COMPLIANCE_FINDING__fedramp_20x_vdr]->"
     "(f:compliance_core__compliance_finding) "
+    'WHERE e.data.scheme = "max" '
     "RETURN e.data.finding_source AS source, e.data.finding_source_key AS source_key"
 )
 
@@ -180,12 +188,12 @@ class VdrMaxCollector(CollectorBase):
                         "ref": f"reconnects-{index}",
                         "entity_type": "edge",
                         "name": EVALUATES_EDGE,
-                        "dimensions": {"fedramp.rule": "vdr"},
+                        "dimensions": dict(DIMENSIONS),
                     },
                     "edge": {
                         "from_key": {
                             "entity_type": EVALUATION_TYPE,
-                            "key": {"finding_source": source, "finding_source_key": source_key},
+                            "key": {"finding_source": source, "finding_source_key": source_key, "scheme": SCHEME},
                         },
                         "to_key": {"entity_type": FINDING_TYPE, "key": {"source": source, "source_key": source_key}},
                         "edge_type": EVALUATES_EDGE,
@@ -201,11 +209,11 @@ class VdrMaxCollector(CollectorBase):
                         "ref": ref,
                         "entity_type": EVALUATION_TYPE,
                         "name": f"VDR {source_key}",
-                        "dimensions": {"fedramp.rule": "vdr"},
+                        "dimensions": dict(DIMENSIONS),
                     },
                     # Only the identity. Every factor, the evaluator, the time and the rationale are
                     # left out so they stay null: unobserved, which every Search reads as the worst case.
-                    "node": {"finding_source": source, "finding_source_key": source_key},
+                    "node": {"finding_source": source, "finding_source_key": source_key, "scheme": SCHEME},
                 }
             )
             edges.append(
@@ -214,7 +222,7 @@ class VdrMaxCollector(CollectorBase):
                         "ref": f"evaluates-{index}",
                         "entity_type": "edge",
                         "name": EVALUATES_EDGE,
-                        "dimensions": {"fedramp.rule": "vdr"},
+                        "dimensions": dict(DIMENSIONS),
                     },
                     "edge": {
                         "from_ref": ref,
