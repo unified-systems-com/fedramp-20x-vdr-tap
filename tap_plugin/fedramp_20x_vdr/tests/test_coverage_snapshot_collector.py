@@ -19,6 +19,7 @@ import tap_plugin.fedramp_20x_vdr.models as vdr  # noqa: F401 - trigger model re
 from tap_plugin.compliance_core.collectors.search_snapshot import SearchSnapshotCollector
 from tap_plugin.fedramp_20x_vdr.collectors.coverage_snapshot.collector import (
     COVERAGE_SUMMARY_SEARCH_ID,
+    RESPONSIBILITY_COVERAGE_SEARCH_ID,
     CoverageSnapshotCollector,
 )
 
@@ -34,6 +35,7 @@ SNAPSHOT = "compliance_core__compliance_search_snapshot"
 CAPTURES = "CAPTURES_SEARCH__compliance_core"
 KEY = "tap_plugin.compliance_core.searches.dimension_mapping"
 PLAYGROUND_SEED_ID = "01a15b2f-df3b-7569-bf22-9ead3f816b84"
+PLAYGROUND_RESPONSIBILITY_SEED_ID = "01a15fdf-61ef-710d-b5d3-e3a7ae238a40"
 
 pytestmark = pytest.mark.django_db(transaction=True, databases=["default", "search_readonly"])
 
@@ -44,11 +46,11 @@ def isolate_collector_registry() -> Iterator[None]:
         yield
 
 
-def _search() -> Entity:
+def _search(name: str = "classification mapping summary") -> Entity:
     made = create_node(
         "search",
         {
-            "name": "classification mapping summary",
+            "name": name,
             "search_type": "module",
             "root": "node",
             "definition": {"runner_key": f"{KEY}:dimension-mapping-summary"},
@@ -93,13 +95,14 @@ class TestSubclass:
     def test_it_is_a_subclass_that_sets_two_attributes_and_defines_no_run(self) -> None:
         assert issubclass(CoverageSnapshotCollector, SearchSnapshotCollector)
         assert CoverageSnapshotCollector.SOURCE == "fedramp_20x_vdr"
-        assert CoverageSnapshotCollector.SEARCH_ENTITY_IDS == (COVERAGE_SUMMARY_SEARCH_ID,)
+        assert CoverageSnapshotCollector.SEARCH_ENTITY_IDS == (COVERAGE_SUMMARY_SEARCH_ID, RESPONSIBILITY_COVERAGE_SEARCH_ID)
         assert "run" not in vars(CoverageSnapshotCollector)
 
     @pytest.mark.spec("req-fedramp-20x-vdr-coverage-snapshot-5")
-    def test_the_search_id_is_the_literal_the_playground_seed_uses(self) -> None:
-        """One-sided on purpose: it shows a change made here. The playground pins the same literal in its tests."""
+    def test_the_search_ids_are_the_literals_the_playground_seed_uses(self) -> None:
+        """One-sided on purpose: it shows a change made here. The playground pins the same literals in its tests."""
         assert COVERAGE_SUMMARY_SEARCH_ID == PLAYGROUND_SEED_ID
+        assert RESPONSIBILITY_COVERAGE_SEARCH_ID == PLAYGROUND_RESPONSIBILITY_SEED_ID
 
 
 class TestRegistered:
@@ -116,21 +119,23 @@ class TestRegistered:
 
 class TestRun:
     @pytest.mark.spec("req-fedramp-20x-vdr-coverage-snapshot-3")
-    def test_one_run_writes_one_snapshot_and_a_second_run_a_second(
+    def test_one_run_writes_one_snapshot_per_search_and_a_second_run_two_more(
         self, isolate_collector_registry: Any, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        search = _search()
-        monkeypatch.setattr(CoverageSnapshotCollector, "SEARCH_ENTITY_IDS", (str(search.pk),))
+        first, second = _search(), _search("responsibility coverage summary")
+        monkeypatch.setattr(CoverageSnapshotCollector, "SEARCH_ENTITY_IDS", (str(first.pk), str(second.pk)))
         collector = _register_fixture()
-        for expected in (1, 2):
+        for expected in (2, 4):
             job = run_collection(collector)
             job.refresh_from_db()
             assert job.status == CollectionJobStatus.SUCCESSFUL.value, (job.summary, job.results)
             assert len(_snapshots()) == expected
-        snap = _snapshots()[0]
-        assert snap.source == "fedramp_20x_vdr" and snap.search_name == "classification mapping summary"
-        edges = Edge.objects.filter(edge_type=CAPTURES, from_entity_id=snap.entity_id)
-        assert [str(e.to_entity_id) for e in edges] == [str(search.pk)]
+        snaps = _snapshots()
+        assert {s.search_name for s in snaps} == {"classification mapping summary", "responsibility coverage summary"}
+        assert all(s.source == "fedramp_20x_vdr" for s in snaps)
+        for snap in snaps:
+            edges = Edge.objects.filter(edge_type=CAPTURES, from_entity_id=snap.entity_id)
+            assert [str(e.to_entity_id) for e in edges] and str(edges[0].to_entity_id) in {str(first.pk), str(second.pk)}
 
     @pytest.mark.spec("req-fedramp-20x-vdr-coverage-snapshot-4")
     def test_a_grid_without_the_search_fails_the_run_naming_the_id_and_writes_nothing(
@@ -140,6 +145,19 @@ class TestRun:
         job.refresh_from_db()
         assert job.status == CollectionJobStatus.FAILED.value
         assert COVERAGE_SUMMARY_SEARCH_ID in json.dumps(job.results)
+        assert _snapshots() == [] and Edge.objects.filter(edge_type=CAPTURES).count() == 0
+
+    @pytest.mark.spec("req-fedramp-20x-vdr-coverage-snapshot-4")
+    def test_one_missing_search_of_the_two_fails_the_run_naming_it_and_writes_no_snapshot(
+        self, isolate_collector_registry: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        present = _search()
+        missing = "01a15fdf-0000-7000-8000-000000000000"
+        monkeypatch.setattr(CoverageSnapshotCollector, "SEARCH_ENTITY_IDS", (str(present.pk), missing))
+        job = run_collection(_register_fixture())
+        job.refresh_from_db()
+        assert job.status == CollectionJobStatus.FAILED.value
+        assert missing in json.dumps(job.results)
         assert _snapshots() == [] and Edge.objects.filter(edge_type=CAPTURES).count() == 0
 
 
