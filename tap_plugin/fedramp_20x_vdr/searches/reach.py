@@ -14,8 +14,9 @@ finding the grid cannot tie to a container or a program yields one row with no o
 
 The row: `finding_id`, `vuln_id`, `component`, `component_id`, `owner_kind` (`program`, `container` or `none`), `owner_id`, `owner`,
 `container_id`, `container` and `programs` (the `{id, name}` of every program involved). Open findings with a
-`CONCERNS_COMPLIANCE_VULNERABILITY` edge only, the set the VDR-max collector covers. The work is proportional to the edges
-of the five types it follows, which it reads in bulk; it has not been measured on a large grid.
+`CONCERNS_COMPLIANCE_VULNERABILITY` edge only, the set the VDR-max collector covers. It reads the edges of the types it
+follows in bulk (not narrowed to the selected findings) and walks each container's programs once; the result limit is applied
+after the rows are computed, so it bounds the answer and not the work. It has not been measured on a large grid.
 
 Inputs: `entity_id` (optional, one finding) and `max_results` (1 to 5000). `reach_rows` returns every row unless
 `max_results` is given, so a method plugin importing it never loses a finding silently. The Search runner defaults
@@ -151,12 +152,20 @@ def reach_rows(inputs: dict[str, Any] | None = None, *, db_alias: str = "default
             closure_cache[program] = _reach(roots.get(program, ()), requires)
         return closure_cache[program]
 
+    container_cache: dict[str, set[str]] = {}
+
+    def programs_run_by(container: str) -> set[str]:
+        """Every program a container runs, directly or through another program; walked once per container."""
+        if container not in container_cache:
+            container_cache[container] = _reach(runs.get(container, ()), runs) - {container}
+        return container_cache[container]
+
     def programs_of(container: str) -> list[str]:
-        return sorted(_reach(runs.get(container, ()), runs) - {container})
+        return sorted(programs_run_by(container))
 
     def containers_running(program: str) -> list[str]:
         """Containers (nodes that run an image) that run the program, directly or through another program."""
-        return sorted(c for c in image_containers if program in _reach(runs.get(c, ()), runs))
+        return sorted(c for c in image_containers if program in programs_run_by(c))
 
     # Names for every node a row can name.
     program_universe = {p for ps in runs.values() for p in ps} | {p for ps in loads.values() for p in ps}
