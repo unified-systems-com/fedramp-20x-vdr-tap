@@ -16,6 +16,7 @@ Default dimensions, one key for every node and edge the plugin ships:
 | Key | Value | Why |
 | --- | --- | --- |
 | `fedramp.rule` | `vdr` | Names the FedRAMP rule family the object belongs to, so a filter can scope to VDR without naming a type. A future rule family from the same regime (the key-security-indicator family) takes its own value. The value is not the entity type. |
+| `vdr.scheme` | the evaluation's `scheme` | Stamped on every `vdr_evaluation` and its `EVALUATES_COMPLIANCE_FINDING` edge, from the node's `scheme` column, so a filter or page can scope to one algorithm (`max`, or another scheme's name) without reading the column. It is a copy for filtering, not the identity: the identity is the column (`req-fedramp-20x-vdr-evaluation-7`). Not stamped on timeframe rows. |
 
 ## Philosophy
 
@@ -44,7 +45,7 @@ FedRAMP's rules ask a provider to evaluate each detected vulnerability and then 
 
 | RID | Name | Status | Notes |
 | --- | --- | :---: | --- |
-| req-fedramp-20x-vdr-evaluation | [Evaluation](#evaluation) | In Development | `vdr_evaluation`, one per finding, factors null by default; the `EVALUATES_COMPLIANCE_FINDING` edge. |
+| req-fedramp-20x-vdr-evaluation | [Evaluation](#evaluation) | In Development | `vdr_evaluation`, one per finding per scheme, factors null by default; the `EVALUATES_COMPLIANCE_FINDING` edge. |
 | req-fedramp-20x-vdr-evidence | [Evidence For A Factor](#evidence-for-a-factor) | In Development | The evidence edge with its factor and basis, and the check that a factor is non-null only with one. |
 | req-fedramp-20x-vdr-timeframe | [Timeframe Rows](#timeframe-rows) | Implemented | `vdr_timeframe` and the seeded rows of the PVR tables, the evaluation deadlines and the acceptance limit. |
 | req-fedramp-20x-vdr-effective | [Worst-Case Semantics](#worst-case-semantics) | Proposed | What an unset factor and an unset class mean; computed, never stored. |
@@ -77,7 +78,8 @@ Entity type `fedramp_20x_vdr__vdr_evaluation`. Default dimensions `{"fedramp.rul
 
 | field | meaning |
 | --- | --- |
-| `finding_source`, `finding_source_key` | The `source` and `source_key` of the finding evaluated, copied verbatim. Together they are the identity: `NATURAL_KEY = ("finding_source", "finding_source_key")`. Required. |
+| `finding_source`, `finding_source_key` | The `source` and `source_key` of the finding evaluated, copied verbatim. Required. With `scheme` they are the identity: `NATURAL_KEY = ("finding_source", "finding_source_key", "scheme")`. |
+| `scheme` | Free text, 1 to 64 characters, required. Names the algorithm or method that made this evaluation: `max` for the VDR-max collector, another name for another method. Part of the identity, so one finding can carry several evaluations, one per scheme, for comparison. The dimension `vdr.scheme` is stamped from it. |
 | `likely_exploitable` | Boolean or `null`. The answer to VER-EVA-ELX. `null` is unobserved. |
 | `internet_reachable` | Boolean or `null`. The answer to VER-EVA-EIR. |
 | `pain` | One of `N0` to `N5`, or `null`. The Potential Agency Impact N-rating of VER-EVA-EPA. |
@@ -85,20 +87,23 @@ Entity type `fedramp_20x_vdr__vdr_evaluation`. Default dimensions `{"fedramp.rul
 | `evaluated_at` | `format: date-time`, or `null`. When the evaluation was made. |
 | `rationale` | Free text, or `null`. |
 
-The identity mirrors the finding's identity so that an evaluation is found again on any grid the finding is. A check (`req-fedramp-20x-vdr-evaluation-4`) reports any evaluation whose key and the key of the finding it evaluates disagree. Display name is the finding's `source_key` prefixed `VDR `.
+The identity mirrors the finding's identity, plus the scheme, so that an evaluation is found again on any grid the finding is. A dimension cannot be part of an identity (the generated search ignores dimensions, `req-grid-entity-natural-key-10`), which is why the scheme is a column and the dimension a copy. A check (`req-fedramp-20x-vdr-evaluation-4`) reports any evaluation whose key and the key of the finding it evaluates disagree. Display name is the finding's `source_key` prefixed `VDR `.
 
-`EVALUATES_COMPLIANCE_FINDING` runs from a `vdr_evaluation` to a `compliance_finding`, declares the plain identity `{"discriminators": []}` and carries the default dimension. The identity admits one evaluation per finding; a check reports any finding pointed at by more than one such edge.
+`EVALUATES_COMPLIANCE_FINDING` runs from a `vdr_evaluation` to a `compliance_finding`, declares the plain identity `{"discriminators": []}` and carries the default dimension. The identity admits one evaluation per finding per scheme; a check reports any finding pointed at by more than one such edge with the same `vdr.scheme`.
 
 #### Acceptance Criteria
 
 | ACID | Title | Status | Description | Notes |
 | --- | --- | :---: | --- | --- |
-| req-fedramp-20x-vdr-evaluation-1 | Keyed By The Finding | Implemented | `vdr_evaluation` declares `NATURAL_KEY = ("finding_source", "finding_source_key")`; two writes for one finding are one node. | |
+| req-fedramp-20x-vdr-evaluation-1 | Keyed By The Finding And Scheme | Proposed | `vdr_evaluation` declares `NATURAL_KEY = ("finding_source", "finding_source_key", "scheme")`; two writes for one finding and one scheme are one node, and one finding with two schemes has two nodes. | Was keyed by the finding alone (v0.1.0); changed 2026-10-21 so several algorithms can evaluate one finding. |
 | req-fedramp-20x-vdr-evaluation-2 | Null Is Unobserved | Implemented | A factor, `evaluator`, `evaluated_at` or `rationale` that no writer set is stored as `null`, never as `false`, `N5` or an empty string. | |
 | req-fedramp-20x-vdr-evaluation-3 | Values Are Checked | Implemented | `pain` outside `N0` to `N5`, a non-boolean factor, or an `evaluated_at` that is not a date-time is refused. | |
 | req-fedramp-20x-vdr-evaluation-6 | Pain Stays Null In v0 | Implemented | A write that sets `pain` to a non-null value is refused in v0, because no PAIN evidence edge can exist (`req-fedramp-20x-vdr-evidence-6`); the refusal is lifted when the PAIN basis list is specified. | Write-time enforcement is possible here because it needs no edge. |
 | req-fedramp-20x-vdr-evaluation-4 | Key Matches The Finding | Proposed | A check reports any evaluation whose key differs from the key of the finding it evaluates. | Detection after the fact: an edge cannot be validated against a node's fields at write time. |
-| req-fedramp-20x-vdr-evaluation-5 | One Per Finding | Proposed | A check reports any finding with more than one `EVALUATES_COMPLIANCE_FINDING` edge pointing at it. | |
+| req-fedramp-20x-vdr-evaluation-5 | One Per Finding Per Scheme | Proposed | A check reports any finding with more than one `EVALUATES_COMPLIANCE_FINDING` edge pointing at it from evaluations of the same scheme. | |
+| req-fedramp-20x-vdr-evaluation-7 | Scheme Is In The Key | Proposed | `scheme` is a required column of 1 to 64 characters, free text; a write without it, with an empty one or with a longer one is refused. | George ruled 2026-10-21: free text, not a closed list. |
+| req-fedramp-20x-vdr-evaluation-8 | Dimension Follows The Column | Proposed | Every evaluation and its edge carry `vdr.scheme` equal to the node's `scheme`; a check reports any that differ. | The dimension is a copy for filtering; the column is the identity. |
+| req-fedramp-20x-vdr-evaluation-9 | Existing Evaluations Become max | Proposed | The schema migration adds `scheme` and sets it to `max` on every evaluation that exists, and the collector's next run finds those rows by the new key and writes none beside them. | Without it the new key finds no match and the collector would add a second `max` evaluation for every finding. The migration also stamps `vdr.scheme: max` on those nodes and their edges. |
 
 ### Evidence For A Factor
 ----
@@ -206,6 +211,7 @@ In a Search the null case is written as `IS NULL OR = <value>`; no stored column
 | req-fedramp-20x-vdr-effective-3 | Class Is Assumed Visibly | Proposed | The class input defaults to `d` and the shipped Searches that use it say so in their description. | |
 | req-fedramp-20x-vdr-effective-4 | Setting A Factor Never Removes A Deadline | Proposed | An evaluation with any factor set, with or without evidence, still appears in every deadline Search with the worst-case row applied, and is also listed in the "evaluated" Search with its deadline marked as the worst-case bound. | Closes the fail-open path found in review of the first draft. |
 | req-fedramp-20x-vdr-effective-6 | Evidence Makes A Factor Count | Proposed | In every incident Search, a non-null factor reads as `null` unless all three hold: an evidence edge for that factor exists, the evaluated finding also cites that evidence through `CITES_COMPLIANCE_EVIDENCE`, and `evaluator` and `evaluated_at` are set. | See `req-fedramp-20x-vdr-incidents-5` and `req-fedramp-20x-vdr-evidence-5`, which is part of this test and not only an audit. Test: only the factor edge exists, and the factor still reads as `null`. |
+| req-fedramp-20x-vdr-effective-8 | Searches Read One Scheme | Proposed | Every shipped deadline and incident Search takes a `$scheme` input, default `max`, and reads only evaluations of that scheme; none mixes schemes. | Comparing schemes is a Search over two schemes, not a side effect of one. |
 | req-fedramp-20x-vdr-effective-7 | Raw Factors Are Not Answers | Proposed | Shipped pages, panels and Searches read the effective values only through the shipped Searches; none reads a `vdr_evaluation` factor field directly. | A review item for every consumer. |
 | req-fedramp-20x-vdr-effective-5 | Worst Case Is A Bound | Implemented | A test over the seeded rows shows that, for every class, lowering PAIN or moving the exposure from `lev_irv` toward `nlev` never shortens `hours`. | Observed property of the tables as read; the test fails if a future table breaks it. |
 
@@ -215,11 +221,11 @@ RID: `req-fedramp-20x-vdr-collector`
 
 Status: `Implemented`
 
-The first stage starts from what the grid already holds. One derived collector reads the findings and writes an all-null evaluation for each, so that firing it once makes every current finding an entry at the worst case. Definition of done for v0: after one run, every open finding linked to a vulnerability has a `vdr_evaluation` with `likely_exploitable`, `internet_reachable` and `pain` all `null`. Whether there are several collectors, or one configurable collector, is a later decision.
+The first stage starts from what the grid already holds. One derived collector reads the findings and writes an all-null evaluation for each, so that firing it once makes every current finding an entry at the worst case. Definition of done for v0: after one run, every open finding linked to a vulnerability has a `vdr_evaluation` of scheme `max` with `likely_exploitable`, `internet_reachable` and `pain` all `null`. Whether there are several collectors, or one configurable collector, is a later decision.
 
 #### Implementation
 
-A `tap_cares` collector (`tap_plugin/fedramp_20x_vdr/collectors/vdr_max/collector.py`, registered as `vdr_max` under scope `fedramp_20x_vdr`) that reads through Gryphon: findings with `status` `open` that have a `CONCERNS_COMPLIANCE_VULNERABILITY` edge. For each such finding that has no evaluation it emits one `vdr_evaluation` (key from the finding; every factor, `evaluator`, `evaluated_at` and `rationale` absent) and the `EVALUATES_COMPLIANCE_FINDING` edge, in one GRIFT batch; the edge names its finding by natural key, so the collector handles no ids. A finding that has no `source` or `source_key` cannot be named, so it is skipped and counted in a warning, never defaulted. A Gryphon query that matches nothing returns the bare empty envelope with no `rows` key (observed 2026-10-19), which the collector reads as zero rows. It never emits a node for a finding that already has an evaluation, because an upsert of a node would overwrite fields a person set. Resolved findings keep their evaluation untouched. A finding with no vulnerability edge is not evaluated in v0 (ruled 2026-10-16).
+A `tap_cares` collector (`tap_plugin/fedramp_20x_vdr/collectors/vdr_max/collector.py`, registered as `vdr_max` under scope `fedramp_20x_vdr`) that reads through Gryphon: findings with `status` `open` that have a `CONCERNS_COMPLIANCE_VULNERABILITY` edge. For each such finding that has no evaluation of scheme `max` it emits one `vdr_evaluation` (key from the finding, with `scheme` `max` and the dimension `vdr.scheme: max`; every factor, `evaluator`, `evaluated_at` and `rationale` absent) and the `EVALUATES_COMPLIANCE_FINDING` edge, in one GRIFT batch; the edge names its finding by natural key, so the collector handles no ids. A finding that has no `source` or `source_key` cannot be named, so it is skipped and counted in a warning, never defaulted. A Gryphon query that matches nothing returns the bare empty envelope with no `rows` key (observed 2026-10-19), which the collector reads as zero rows. It never emits a node for a finding that already has an evaluation, because an upsert of a node would overwrite fields a person set. Resolved findings keep their evaluation untouched. A finding with no vulnerability edge is not evaluated in v0 (ruled 2026-10-16).
 
 **Residual risk, observed 2026-10-19.** A GRIFT node sent under an existing natural key replaces the row: every field the node omits goes back to null (a test pins this). The collector therefore never sends a node for a key that already has an evaluation. Its read of the existing evaluations and its submit are not atomic, so an evaluation a person wrote in the milliseconds between them would be blanked. The collector reads the existing set last to keep that window short, it is the step-0 bootstrap that runs before anyone evaluates, and the overwritten values remain in the node's history; GRIFT offers no insert-only form that would close the window.
 
@@ -229,12 +235,14 @@ The collector needs no credentials and makes no external call.
 
 | ACID | Title | Status | Description | Notes |
 | --- | --- | :---: | --- | --- |
-| req-fedramp-20x-vdr-collector-1 | Every Linked Open Finding | Implemented | On a grid with no evaluations, after one run every open finding linked to a vulnerability has exactly one evaluation, each with all three factors `null`. | The v0 definition of done. On a grid that already has evaluations, a run adds one only for each open linked finding without one and changes none (`-2`, `-3`). |
+| req-fedramp-20x-vdr-collector-1 | Every Linked Open Finding | Implemented | On a grid with no evaluations, after one run every open finding linked to a vulnerability has exactly one evaluation of scheme `max`, each with all three factors `null`. | The v0 definition of done. On a grid that already has evaluations, a run adds one only for each open linked finding without one and changes none (`-2`, `-3`). |
 | req-fedramp-20x-vdr-collector-2 | Idempotent | Implemented | A second run emits nothing and changes no node. | |
 | req-fedramp-20x-vdr-collector-3 | Never Overwrites | Implemented | An evaluation with a factor, `evaluator` or `evaluated_at` set is not re-emitted by a later run. | |
 | req-fedramp-20x-vdr-collector-4 | Unlinked Findings Skipped | Implemented | An open finding with no vulnerability edge receives no evaluation. | |
 | req-fedramp-20x-vdr-collector-5 | Writes Through GRIFT | Implemented | The collector submits one GRIFT batch and aborts on rejection. | |
 | req-fedramp-20x-vdr-collector-7 | Disagreeing Reads Stop The Run | Implemented | If the set of connected evaluations holds a key the set of existing evaluations lacks, which cannot be true, the run records `INCONSISTENT_READ`, fails and submits nothing; a Gryphon read that raises fails the run likewise. | An empty-looking "existing" read is the one way the no-overwrite guard could fail open. Found in review of PR# 5. |
+| req-fedramp-20x-vdr-collector-8 | Writes The max Scheme | Proposed | Every evaluation the collector writes has `scheme` `max` and the dimension `vdr.scheme: max`, on the node and on its edge. | George ruled 2026-10-21. |
+| req-fedramp-20x-vdr-collector-9 | Other Schemes Are Not Its Business | Proposed | An evaluation of another scheme for the same finding is not counted as an existing `max` evaluation, is not reconnected, and is never touched; a finding evaluated only by another scheme still gets its `max` evaluation. | Several schemes must coexist so they can be compared. |
 | req-fedramp-20x-vdr-collector-6 | Reconnects An Edge-Less Evaluation | Implemented | An evaluation that exists but has no `EVALUATES_COMPLIANCE_FINDING` edge, for an open linked finding, gets that edge and nothing else; its node is not re-sent. | Every Search traverses the edge. Found in review of PR# 5. |
 
 ### Coverage Snapshot Collector
@@ -358,7 +366,7 @@ Design-time; superseded by the manifest once the owning requirement is `Implemen
 
 | Model | Entity type | Category | Rationale |
 | --- | --- | --- | --- |
-| `vdr_evaluation` | `fedramp_20x_vdr__vdr_evaluation` | Judgement | A judgement by a party at a time, one per finding, kept apart from the scanner's observation. |
+| `vdr_evaluation` | `fedramp_20x_vdr__vdr_evaluation` | Judgement | A judgement by a party at a time, one per finding per scheme, kept apart from the scanner's observation. |
 | `vdr_timeframe` | `fedramp_20x_vdr__vdr_timeframe` | Reference data | One cell of a FedRAMP table, so the table is data with a cited source. |
 
 ## Edge types
