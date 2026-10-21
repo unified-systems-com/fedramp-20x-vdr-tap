@@ -133,9 +133,10 @@ class TestRun:
         snaps = _snapshots()
         assert {s.search_name for s in snaps} == {"classification mapping summary", "responsibility coverage summary"}
         assert all(s.source == "fedramp_20x_vdr" for s in snaps)
+        expected_target = {first.name: str(first.pk), second.name: str(second.pk)}
         for snap in snaps:
             edges = Edge.objects.filter(edge_type=CAPTURES, from_entity_id=snap.entity_id)
-            assert [str(e.to_entity_id) for e in edges] and str(edges[0].to_entity_id) in {str(first.pk), str(second.pk)}
+            assert [str(e.to_entity_id) for e in edges] == [expected_target[snap.search_name]]
 
     @pytest.mark.spec("req-fedramp-20x-vdr-coverage-snapshot-4")
     def test_a_grid_without_the_search_fails_the_run_naming_the_id_and_writes_nothing(
