@@ -33,9 +33,9 @@ class FedrampVdrConfig(TapPluginConfig):
             cls=CoverageSnapshotCollector,
             name="FedRAMP 20x VDR Coverage Snapshot",
             description=(
-                "Records the classification-mapping summary (how much of the inventory carries the data "
-                "classification it should) as a search snapshot each run, so coverage can be read over time. "
-                "Reads the grid, calls no external service and needs no credential. The Search it records is "
-                "seeded by the playground; a grid without it fails the run and writes nothing."
+                "Records the two coverage summaries (how much of the inventory carries the data classification "
+                "it should, and the responsibility coverage) as search snapshots each run, so coverage can be read "
+                "over time. Reads the grid, calls no external service and needs no credential. The Searches it "
+                "records are seeded by the playground; a grid missing either fails the run and writes nothing."
             ),
         )
