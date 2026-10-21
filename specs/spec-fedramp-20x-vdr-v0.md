@@ -51,8 +51,8 @@ FedRAMP's rules ask a provider to evaluate each detected vulnerability and then 
 | req-fedramp-20x-vdr-effective | [Worst-Case Semantics](#worst-case-semantics) | Proposed | What an unset factor and an unset class mean; computed, never stored. |
 | req-fedramp-20x-vdr-collector | [VDR-Max Collector](#vdr-max-collector) | Implemented | One derived collector that gives every open, vulnerability-linked finding an all-null evaluation. |
 | req-fedramp-20x-vdr-coverage-snapshot | [Coverage Snapshot Collector](#coverage-snapshot-collector) | Implemented | One derived collector, a subclass of compliance_core's `SearchSnapshotCollector`, that records the classification-mapping summary hourly as a `compliance_search_snapshot`. |
-| req-fedramp-20x-vdr-reach | [Finding Reach](#finding-reach) | Proposed | The owner of each open finding (its program by the `RUNS_PACKAGE` closure, else its container) and the programs involved, with the fail-safe reduction of profiles. Importable and a `module` Search runner; computed on read; reads no profile. |
-| req-fedramp-20x-vdr-pain | [PAIN Levels And Deadlines](#pain-levels-and-deadlines) | Proposed | The ordered levels N1 to N5, the exposure column and `deadline_hours` from the timeframe rows, for any method plugin that supplies a level. |
+| req-fedramp-20x-vdr-reach | [Finding Reach](#finding-reach) | Implemented | The owner of each open finding (its program by the `RUNS_PACKAGE` closure, else its container) and the programs involved, with the fail-safe reduction of profiles. Importable and a `module` Search runner; computed on read; reads no profile. |
+| req-fedramp-20x-vdr-pain | [PAIN Levels And Deadlines](#pain-levels-and-deadlines) | Implemented | The ordered levels N1 to N5, the exposure column and `deadline_hours` from the timeframe rows, for any method plugin that supplies a level. |
 | req-fedramp-20x-vdr-deadlines | [Deadlines](#deadlines) | Proposed | Evaluation deadline, remediation deadline, overdue and acceptance flags as Searches. Depends on Issue# 43 - compliance-core-tap and Issue# 1064 - tap. |
 | req-fedramp-20x-vdr-incidents | [Reportable Incidents](#reportable-incidents) | Proposed | The internet-reachable and non-internet-reachable incident rules as Searches. Ship condition: Gryphon must express the evidence test in one query (`-incidents-6`). |
 | req-fedramp-20x-vdr-nongoals | [v0 Non-Goals](#v0-non-goals) | Proposed | What v0 does not build. |
@@ -291,7 +291,7 @@ This is the first collector of the "run a Search on a schedule and keep the resu
 ----
 RID: `req-fedramp-20x-vdr-reach`
 
-Status: `Proposed`
+Status: `Implemented`
 
 A method that scores a finding by what its asset needs has to know which asset the finding belongs to. This requirement ships that answer once, so every method plugin (the first is `stackarmor_vdr`) reuses it and none re-derives it. It names the owner of each open finding and the programs involved, and ships the one reduction every method with a confidentiality, integrity and availability requirement (CR, IR, AR) needs. It reads no profile and scores nothing: what a program needs is the method's own stamp, held by the method plugin, so adding a method changes no node or edge that describes the system (ruled by George, 2026-10-21).
 
@@ -307,7 +307,7 @@ The unit is one **finding on one owner**. A finding is already one vulnerability
 
 **A library.** A finding on a library belongs to the programs that `LOADS_LIBRARY` it, one row each. A library no program loads has no container route in the grid (the vocabulary has no host-to-library edge) and yields one row with no owner and no programs, so the gap shows. A package's `SHIPS_LIBRARY` is not followed in this version.
 
-**The row.** `finding_id`, `vuln_id`, `component`, `owner_kind` (`program`, `container` or `none`), `owner_id`, `owner`, `container_id` and `container` (the container whose image host installs the package, carried even when the owner is a program, because a package is shared across hosts and the pair of owner and container is what makes a row unique; null for `none`), and `programs`, the list of `{id, name}` of every program involved (the owner alone for a program, the container's programs for a container, empty for `none`). Open findings with a `CONCERNS_COMPLIANCE_VULNERABILITY` edge only, the set the VDR-max collector covers.
+**The row.** `finding_id`, `vuln_id`, `component`, `component_id` (the carrier node, so two components of one name stay two rows), `owner_kind` (`program`, `container` or `none`), `owner_id`, `owner`, `container_id` and `container` (the container whose image host installs the package, carried even when the owner is a program, because a package is shared across hosts and the pair of owner and container is what makes a row unique; null for `none`), and `programs`, the list of `{id, name}` of every program involved (the owner alone for a program, the container's programs for a container, empty for `none`). Open findings with a `CONCERNS_COMPLIANCE_VULNERABILITY` edge only, the set the VDR-max collector covers.
 
 **The reduction.** `reduce_profiles(profiles)` in `tap_plugin/fedramp_20x_vdr/levels.py` takes a list of `(cr, ir, ar)` triples, each value `low`, `medium` or `high` or `None`, and returns one triple: per objective, the highest value, in the order low, medium, high. A `None`, and an empty list, count as high: an unclassified program raises the result, the fail-safe of the stair-step. The method reads each program's profile from its own stamp and calls the reducer; a method with another profile shape ignores it.
 
@@ -317,27 +317,27 @@ The unit is one **finding on one owner**. A finding is already one vulnerability
 
 | ACID | Title | Status | Description | Notes |
 | --- | --- | :---: | --- | --- |
-| req-fedramp-20x-vdr-reach-1 | One Row Per Finding And Owner | Proposed | A finding owned by two programs yields two rows; nothing is merged across programs, containers or components. | Ruled by George, 2026-10-20. |
-| req-fedramp-20x-vdr-reach-2 | A Program Owns Its Closure | Proposed | In a container that installs the package and runs the program, a package reachable from the program's `RUNS_PACKAGE` target along `REQUIRES_PACKAGE`, at any depth, belongs to that program; a program with two roots owns both closures. A program that another container runs does not claim the package in this one; there the package falls to the container (`reach-3`). | Drawn for the seed in the playground; the parser draws none. |
-| req-fedramp-20x-vdr-reach-3 | The Rest Belongs To The Container | Proposed | A package outside every closure, installed by an image host that a container runs, yields a row owned by that container, with the container's programs involved. | Ruled by George, 2026-10-21. |
-| req-fedramp-20x-vdr-reach-4 | Unmarked Is Never Not In Use | Proposed | No row is dropped because a package has no program edge; only a program edge moves a package from the container to its program. | The stair-step rule. |
-| req-fedramp-20x-vdr-reach-5 | Operating-System Programs Do Not Count | Proposed | A program held by an operating system through `RUNS_PROGRAM` is not one of a container's programs. | Otherwise every container would be High. |
-| req-fedramp-20x-vdr-reach-6 | A Library Follows Its Loaders | Proposed | A finding on a library yields a row per program that loads it; a library no program loads yields one row, `owner_kind` `none`, with no programs. | |
-| req-fedramp-20x-vdr-reach-7 | Programs Are Returned | Proposed | Every row carries the full list of programs involved, so a method can read a profile for each and reduce them. | |
-| req-fedramp-20x-vdr-reach-8 | The Reduction Fails Safe | Proposed | `reduce_profiles` returns the per-objective maximum in the order low, medium, high, and a `None` entry or an empty list counts as high. | A pure function. |
-| req-fedramp-20x-vdr-reach-9 | Open Linked Findings Only | Proposed | A resolved finding, or one with no vulnerability edge, yields no row. | The set of `req-fedramp-20x-vdr-collector-1`. |
-| req-fedramp-20x-vdr-reach-10 | No Profile In The Base | Proposed | The plugin reads no stamp, dimension or catalog and ships no profile node, archetype or asset dimension; it adds nothing to a node or edge that describes the system. | Ruled by George, 2026-10-21: a method's stamp lives in the method's plugin. |
-| req-fedramp-20x-vdr-reach-11 | Nothing Is Stored | Proposed | The runner writes no node or edge, and nothing the plugin ships gains a field for an owner. | `req-fedramp-20x-vdr-effective-1`. |
-| req-fedramp-20x-vdr-reach-12 | Read Rules | Proposed | The runner reads through `tap_grid.gryphon.read_scope` with the caller's `db_alias`, and a tombstoned node contributes nothing. | As `dimension-coverage` in `compliance_core`. |
-| req-fedramp-20x-vdr-reach-13 | Importable And Keyed | Proposed | `reach_rows` is importable and the runner is registered as `tap_plugin.fedramp_20x_vdr.searches.reach:vdr-reach`. | The instance's Search pins this literal. |
-| req-fedramp-20x-vdr-reach-15 | Container Is Carried | Proposed | Every row carries `container_id` and `container`, including a row whose owner is a program, so one finding on one package in two containers is two rows even when the same program owns it in both; a row with `owner_kind` `none` carries them null. | The uniqueness of 'one row per finding per owner' (`reach-1`) rests on the pair. |
-| req-fedramp-20x-vdr-reach-14 | Dependency Floor | Proposed | `depends_on` and the dependency floor name `computing_core` 0.10.2, the first release that ships `RUNS_PACKAGE`. | |
+| req-fedramp-20x-vdr-reach-1 | One Row Per Finding And Owner | Implemented | A finding owned by two programs yields two rows; nothing is merged across programs, containers or components. | Ruled by George, 2026-10-20. |
+| req-fedramp-20x-vdr-reach-2 | A Program Owns Its Closure | Implemented | In a container that installs the package and runs the program, a package reachable from the program's `RUNS_PACKAGE` target along `REQUIRES_PACKAGE`, at any depth, belongs to that program; a program with two roots owns both closures. A program that another container runs does not claim the package in this one; there the package falls to the container (`reach-3`). | Drawn for the seed in the playground; the parser draws none. |
+| req-fedramp-20x-vdr-reach-3 | The Rest Belongs To The Container | Implemented | A package outside every closure, installed by an image host that a container runs, yields a row owned by that container, with the container's programs involved. | Ruled by George, 2026-10-21. |
+| req-fedramp-20x-vdr-reach-4 | Unmarked Is Never Not In Use | Implemented | No row is dropped because a package has no program edge; only a program edge moves a package from the container to its program. | The stair-step rule. |
+| req-fedramp-20x-vdr-reach-5 | Operating-System Programs Do Not Count | Implemented | A program held by an operating system through `RUNS_PROGRAM` is not one of a container's programs. | Otherwise every container would be High. |
+| req-fedramp-20x-vdr-reach-6 | A Library Follows Its Loaders | Implemented | A finding on a library yields a row per program that loads it; a library no program loads yields one row, `owner_kind` `none`, with no programs. | |
+| req-fedramp-20x-vdr-reach-7 | Programs Are Returned | Implemented | Every row carries the full list of programs involved, so a method can read a profile for each and reduce them. | |
+| req-fedramp-20x-vdr-reach-8 | The Reduction Fails Safe | Implemented | `reduce_profiles` returns the per-objective maximum in the order low, medium, high, and a `None` entry or an empty list counts as high. | A pure function. |
+| req-fedramp-20x-vdr-reach-9 | Open Linked Findings Only | Implemented | A resolved finding, or one with no vulnerability edge, yields no row. | The set of `req-fedramp-20x-vdr-collector-1`. |
+| req-fedramp-20x-vdr-reach-10 | No Profile In The Base | Implemented | The plugin reads no stamp, dimension or catalog and ships no profile node, archetype or asset dimension; it adds nothing to a node or edge that describes the system. | Ruled by George, 2026-10-21: a method's stamp lives in the method's plugin. |
+| req-fedramp-20x-vdr-reach-11 | Nothing Is Stored | Implemented | The runner writes no node or edge, and nothing the plugin ships gains a field for an owner. | `req-fedramp-20x-vdr-effective-1`. |
+| req-fedramp-20x-vdr-reach-12 | Read Rules | Implemented | The runner reads through `tap_grid.gryphon.read_scope` with the caller's `db_alias`, and a tombstoned node contributes nothing. | As `dimension-coverage` in `compliance_core`. |
+| req-fedramp-20x-vdr-reach-13 | Importable And Keyed | Implemented | `reach_rows` is importable and the runner is registered as `tap_plugin.fedramp_20x_vdr.searches.reach:vdr-reach`. | The instance's Search pins this literal. |
+| req-fedramp-20x-vdr-reach-15 | Container Is Carried | Implemented | Every row carries `container_id` and `container`, including a row whose owner is a program, so one finding on one package in two containers is two rows even when the same program owns it in both; a row with `owner_kind` `none` carries them null. | The uniqueness of 'one row per finding per owner' (`reach-1`) rests on the pair. |
+| req-fedramp-20x-vdr-reach-14 | Dependency Floor | Implemented | `depends_on` and the dependency floor name `computing_core` 0.10.2, the first release that ships `RUNS_PACKAGE`. | |
 
 ### PAIN Levels And Deadlines
 ----
 RID: `req-fedramp-20x-vdr-pain`
 
-Status: `Proposed`
+Status: `Implemented`
 
 FedRAMP publishes the PAIN vocabulary (N1 to N5) and the remediation matrix, and not the function from a finding to an N-level. This requirement ships everything about PAIN that a method does not decide: the ordered levels, the exposure column, and the deadline lookup. A method plugin supplies only the level (`stackarmor_vdr` is the first). Another evaluation system, with another way to reach an N-level, reuses all of this.
 
@@ -357,15 +357,15 @@ FedRAMP publishes the PAIN vocabulary (N1 to N5) and the remediation matrix, and
 
 | ACID | Title | Status | Description | Notes |
 | --- | --- | :---: | --- | --- |
-| req-fedramp-20x-vdr-pain-1 | Pure Levels | Proposed | `levels.py` imports and runs with Django blocked, reads no node and gives the same output for the same input. | |
-| req-fedramp-20x-vdr-pain-2 | Ordered Levels | Proposed | The levels N1 to N5 compare in order, and a value outside them is refused. | |
-| req-fedramp-20x-vdr-pain-3 | Exposure Column | Proposed | The column is `lev_irv`, `lev_nirv` or `nlev` from the two flags, and a not-likely-exploitable finding is `nlev` whatever its reachability. A `likely_exploitable` that is null, or not backed by evidence, reads as true (`req-fedramp-20x-vdr-effective-1`, `-6`), so unknown never selects `nlev`. | The three columns of the timeframe table. |
-| req-fedramp-20x-vdr-pain-4 | Reachability Reads As The Effective Rule | Proposed | IRV is true for an evaluation of the chosen scheme with the factor null or unsupported, or when the finding has none, and false only with an evidence-backed false. | `req-fedramp-20x-vdr-effective-6`. |
-| req-fedramp-20x-vdr-pain-5 | Deadline From The Table | Proposed | `deadline_hours` returns the `vdr_timeframe` value for the class, level and column; for class D, N5 and `lev_irv` it is 12. | The 48 seeded `VDR-TFR-PVR` rows equal the memo's Appendix B (read 2026-10-20). |
-| req-fedramp-20x-vdr-pain-6 | No Timeframe For N1 | Proposed | `deadline_hours` returns `None` for N1, and a method row shows a null deadline, not zero. | |
-| req-fedramp-20x-vdr-pain-7 | Hours, Not Dates | Proposed | The function returns hours; no date arithmetic is done here. | The clock anchor is `req-fedramp-20x-vdr-deadlines`. |
-| req-fedramp-20x-vdr-pain-9 | Backed Value Or None | Proposed | `backed_factors` returns `true` or `false` for a factor only when the effective rule's evidence conditions hold, and `None` for a null, unbacked or missing one; the effective value is `None` read as true, so the two never disagree. | Lets a method treat unknown as 'no override' while the base still fails safe. |
-| req-fedramp-20x-vdr-pain-8 | A Method Supplies Only The Level | Proposed | The plugin ships no scoring formula, weight or threshold, and `vdr_evaluation.pain` stays refused. | The method plugin owns its math. |
+| req-fedramp-20x-vdr-pain-1 | Pure Levels | Implemented | `levels.py` imports and runs with Django blocked, reads no node and gives the same output for the same input. | |
+| req-fedramp-20x-vdr-pain-2 | Ordered Levels | Implemented | The levels N1 to N5 compare in order, and a value outside them is refused. | |
+| req-fedramp-20x-vdr-pain-3 | Exposure Column | Implemented | The column is `lev_irv`, `lev_nirv` or `nlev` from the two flags, and a not-likely-exploitable finding is `nlev` whatever its reachability. A `likely_exploitable` that is null, or not backed by evidence, reads as true (`req-fedramp-20x-vdr-effective-1`, `-6`), so unknown never selects `nlev`. | The three columns of the timeframe table. |
+| req-fedramp-20x-vdr-pain-4 | Reachability Reads As The Effective Rule | Implemented | IRV is true for an evaluation of the chosen scheme with the factor null or unsupported, or when the finding has none, and false only with an evidence-backed false. | `req-fedramp-20x-vdr-effective-6`. |
+| req-fedramp-20x-vdr-pain-5 | Deadline From The Table | Implemented | `deadline_hours` returns the `vdr_timeframe` value for the class, level and column; for class D, N5 and `lev_irv` it is 12. | The 48 seeded `VDR-TFR-PVR` rows equal the memo's Appendix B (read 2026-10-20). |
+| req-fedramp-20x-vdr-pain-6 | No Timeframe For N1 | Implemented | `deadline_hours` returns `None` for N1, and a method row shows a null deadline, not zero. | |
+| req-fedramp-20x-vdr-pain-7 | Hours, Not Dates | Implemented | The function returns hours; no date arithmetic is done here. | The clock anchor is `req-fedramp-20x-vdr-deadlines`. |
+| req-fedramp-20x-vdr-pain-9 | Backed Value Or None | Implemented | `backed_factors` returns `true` or `false` for a factor only when the effective rule's evidence conditions hold, and `None` for a null, unbacked or missing one; the effective value is `None` read as true, so the two never disagree. | Lets a method treat unknown as 'no override' while the base still fails safe. |
+| req-fedramp-20x-vdr-pain-8 | A Method Supplies Only The Level | Implemented | The plugin ships no scoring formula, weight or threshold, and `vdr_evaluation.pain` stays refused. | The method plugin owns its math. |
 
 ### Deadlines
 ----
