@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.1](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/compare/v0.1.0...v0.1.1) (2026-10-21)
+
+
+### Features
+
+* **fedramp_20x_vdr:** an evaluation carries a scheme; vdr_max writes max ([459bbbd](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/459bbbdc2d4256ce2a3005b401fd57ead5af6986))
+* **fedramp_20x_vdr:** an evaluation carries a scheme; vdr_max writes max ([280b1b3](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/280b1b3ab0f598af4c59dfcda0d88f72b58282da))
+
+
+### Bug Fixes
+
+* **fedramp_20x_vdr:** the migration normalizes a stray vdr.scheme to max; test the column-only backfill ([9d731ff](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/9d731ffd8811e1b5ebae56fa32e777b667cfa332))
+
+
+### Documentation
+
+* **spec:** finding reach and PAIN levels, the base other methods build on ([8cfbcc7](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/8cfbcc711677d6c267b8bc3db7c2eab0dba72400))
+
 ## 0.1.0 (2026-10-20)
 
 
