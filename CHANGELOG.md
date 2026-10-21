@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.2](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/compare/v0.1.1...v0.1.2) (2026-10-21)
+
+
+### Features
+
+* **fedramp_20x_vdr:** finding reach, PAIN levels, the deadline lookup and backed factors ([1070103](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/1070103d61cc3619e8b449268df7fcaf5347f80d))
+* **fedramp_20x_vdr:** finding reach, PAIN levels, the deadline lookup and backed factors ([38b49ae](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/38b49ae7ad767dfa49d17de16cf36f08f994ff6a))
+
+
+### Bug Fixes
+
+* **fedramp_20x_vdr:** no silent truncation; component identity; unknown reads as worst case ([0885b28](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/0885b28f07448a7643b7bd6ba7b642e4eb3271d6))
+
+
+### Performance Improvements
+
+* **fedramp_20x_vdr:** walk each container's programs once ([b6049fd](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/b6049fd5ca8624cd4d46dfbae6ca0dec6f9a9dc1))
+
 ## [0.1.1](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/compare/v0.1.0...v0.1.1) (2026-10-21)
 
 
