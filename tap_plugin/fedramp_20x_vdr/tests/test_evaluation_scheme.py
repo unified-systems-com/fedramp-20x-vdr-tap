@@ -212,3 +212,40 @@ class TestMigration:
         assert _entity(old.pk).dimensions == {"fedramp.rule": "vdr", "vdr.scheme": "max"}
         assert _entity(edge.entity_id).dimensions == {"fedramp.rule": "vdr", "vdr.scheme": "max"}
         assert _entity(unrelated.pk).dimensions == unrelated_before
+
+    @pytest.mark.spec("req-fedramp-20x-vdr-evaluation-9")
+    def test_a_conflicting_dimension_is_normalized_to_max(self) -> None:
+        from django.apps import apps
+        from django.db import connection
+
+        finding = _finding("a")
+        old = _evaluation("a", "max")
+        create_edge(old, finding, EVALUATES)
+        edge = Edge.objects.get(edge_type=EVALUATES, from_entity_id=old.pk)
+        for pk in (old.pk, edge.entity_id):
+            Entity.objects.filter(pk=pk).update(dimensions={"fedramp.rule": "vdr", "vdr.scheme": "other"})
+
+        class _Editor:
+            def __init__(self) -> None:
+                self.connection = connection
+
+        migration = importlib.import_module("tap_plugin.fedramp_20x_vdr.migrations.0002_evaluation_scheme")
+        migration.stamp_existing_as_max(apps, _Editor())
+        assert _entity(old.pk).dimensions["vdr.scheme"] == "max"
+        assert _entity(edge.entity_id).dimensions["vdr.scheme"] == "max"
+
+    @pytest.mark.spec("req-fedramp-20x-vdr-evaluation-9")
+    def test_a_row_backfilled_at_the_column_only_is_found_by_the_collector(self, isolate_collector_registry: Any) -> None:
+        """What AddField(default="max") does: the column changes under the row and nothing else does.
+
+        The collector reads `e.data.scheme` through Gryphon; this shows that reads the column, so an evaluation
+        written before the scheme existed is found and the collector does not add a second `max` beside it.
+        """
+        finding = _finding("a")
+        old = _evaluation("a", "legacy-placeholder", rationale="written by a person")
+        create_edge(old, finding, EVALUATES)
+        get_model_class(EVALUATION).objects.filter(entity_id=old.pk).update(scheme="max")
+        _run()
+        evaluations = _all()
+        assert [(e.finding_source_key, e.scheme) for e in evaluations] == [("a", "max")]
+        assert evaluations[0].rationale == "written by a person"

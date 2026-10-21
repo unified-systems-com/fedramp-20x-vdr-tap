@@ -15,7 +15,11 @@ SCHEME_DIMENSION = "vdr.scheme"
 
 
 def stamp_existing_as_max(apps, schema_editor):
-    """Stamp `vdr.scheme: max` on every existing evaluation and its edge; leave anything already stamped alone."""
+    """Stamp `vdr.scheme: max` on every existing evaluation and its edge, whatever the dimension said before.
+
+    The column was just set to `max` on every row, so the dimension, a copy of it, is set to `max` too. A stray
+    `vdr.scheme` of another value would otherwise sit beside a `max` column and contradict it.
+    """
     Entity = apps.get_model("tap_grid", "Entity")
     Edge = apps.get_model("tap_grid", "Edge")
     db = schema_editor.connection.alias
@@ -28,7 +32,7 @@ def stamp_existing_as_max(apps, schema_editor):
     ):
         for entity in entities:
             dimensions = dict(entity.dimensions or {})
-            if SCHEME_DIMENSION not in dimensions:
+            if dimensions.get(SCHEME_DIMENSION) != "max":
                 dimensions[SCHEME_DIMENSION] = "max"
                 Entity.objects.using(db).filter(pk=entity.pk).update(dimensions=dimensions)
 
