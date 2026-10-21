@@ -249,3 +249,45 @@ class TestMigration:
         evaluations = _all()
         assert [(e.finding_source_key, e.scheme) for e in evaluations] == [("a", "max")]
         assert evaluations[0].rationale == "written by a person"
+
+
+class TestUpgradeFromV01:
+    """The real upgrade path: a database at migration 0001 holding a v0.1.0 evaluation, migrated forward to 0002."""
+
+    @pytest.mark.spec("req-fedramp-20x-vdr-evaluation-9")
+    def test_a_v01_evaluation_becomes_max_and_the_collector_adds_no_second(self, isolate_collector_registry: Any) -> None:
+        from django.db import connection
+        from django.db.migrations.executor import MigrationExecutor
+
+        app = "fedramp_20x_vdr"
+        finding = _finding("old")
+
+        executor = MigrationExecutor(connection)
+        executor.migrate([(app, "0001_initial")])  # back to the released schema: no scheme column
+        try:
+            old_apps = MigrationExecutor(connection).loader.project_state([(app, "0001_initial")]).apps
+            Historic = old_apps.get_model(app, "VdrEvaluation")
+            assert "scheme" not in {f.name for f in Historic._meta.get_fields()}
+            entity = Entity.objects.create(
+                entity_type=EVALUATION, name="VDR old", dimensions={"fedramp.rule": "vdr"}
+            )
+            Historic.objects.create(
+                entity_id=entity.pk,
+                finding_source="github_core",
+                finding_source_key="old",
+                rationale="written by v0.1.0",
+            )
+        finally:
+            MigrationExecutor(connection).migrate([(app, "0002_evaluation_scheme")])
+
+        migrated = get_model_class(EVALUATION).objects.get(entity_id=entity.pk)
+        assert migrated.scheme == "max" and migrated.rationale == "written by v0.1.0"
+        assert Entity.objects.get(pk=entity.pk).dimensions == {"fedramp.rule": "vdr", "vdr.scheme": "max"}
+
+        _run()
+        evaluations = _all()
+        assert [(e.finding_source_key, e.scheme) for e in evaluations] == [("old", "max")]
+        assert evaluations[0].rationale == "written by v0.1.0"
+        # It had no edge to its finding, so the run gave it the edge and nothing else.
+        edge = Edge.objects.get(edge_type=EVALUATES, from_entity_id=entity.pk)
+        assert str(edge.to_entity_id) == str(finding.pk)
