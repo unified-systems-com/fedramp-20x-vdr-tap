@@ -30,6 +30,8 @@ timeframes = "grift/timeframes.grift.json"
 # Module Search runners (req-fedramp-20x-vdr-reach). Registered under the runner's module scope.
 [searches]
 vdr-reach = "tap_plugin.fedramp_20x_vdr.searches.reach.vdr_reach"
+vdr-deadlines = "tap_plugin.fedramp_20x_vdr.searches.clocks.vdr_deadlines"
+vdr-incidents = "tap_plugin.fedramp_20x_vdr.searches.clocks.vdr_incidents"
 
 [[boot.records]]
 name = "ci"

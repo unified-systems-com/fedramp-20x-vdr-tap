@@ -53,8 +53,8 @@ FedRAMP's rules ask a provider to evaluate each detected vulnerability and then 
 | req-fedramp-20x-vdr-coverage-snapshot | [Coverage Snapshot Collector](#coverage-snapshot-collector) | Implemented | One derived collector, a subclass of compliance_core's `SearchSnapshotCollector`, that records the classification-mapping summary hourly as a `compliance_search_snapshot`. |
 | req-fedramp-20x-vdr-reach | [Finding Reach](#finding-reach) | Implemented | The owner of each open finding (its program by the `RUNS_PACKAGE` closure, else its container) and the programs involved, with the fail-safe reduction of profiles. Importable and a `module` Search runner; computed on read; reads no profile. |
 | req-fedramp-20x-vdr-pain | [PAIN Levels And Deadlines](#pain-levels-and-deadlines) | Implemented | The ordered levels N1 to N5, the exposure column and `deadline_hours` from the timeframe rows, for any method plugin that supplies a level. |
-| req-fedramp-20x-vdr-deadlines | [Deadlines](#deadlines) | Proposed | Evaluation deadline, remediation deadline, overdue and acceptance flags as Searches. Depends on Issue# 43 - compliance-core-tap and Issue# 1064 - tap. |
-| req-fedramp-20x-vdr-incidents | [Reportable Incidents](#reportable-incidents) | Proposed | The internet-reachable and non-internet-reachable incident rules as Searches. Ship condition: Gryphon must express the evidence test in one query (`-incidents-6`). |
+| req-fedramp-20x-vdr-deadlines | [Deadlines](#deadlines) | Implemented | Evaluation deadline, remediation deadline, overdue and acceptance flags as Searches. Needs `first_detected_at` (Issue# 43 - compliance-core-tap, v0.8.4); the runner does the date arithmetic. |
+| req-fedramp-20x-vdr-incidents | [Reportable Incidents](#reportable-incidents) | Implemented | The internet-reachable and non-internet-reachable incident rules as Searches. Ship condition: each is one Search that applies the evidence test itself (`-incidents-6`). |
 | req-fedramp-20x-vdr-nongoals | [v0 Non-Goals](#v0-non-goals) | Proposed | What v0 does not build. |
 | req-fedramp-20x-vdr-report | [VDR Report](#v0-non-goals) | Backlog | The per-period report node and the published JSON schemas (VER-RPT-VDT, VER-RPT-PER, VER-TFR-MRH). |
 | req-fedramp-20x-vdr-grouping | [Grouping](#v0-non-goals) | Backlog | Logical groupings of affected resources (VER-EVA-GRV). |
@@ -213,9 +213,9 @@ In a Search the null case is written as `IS NULL OR = <value>`; no stored column
 | req-fedramp-20x-vdr-effective-1 | Nothing Effective Is Stored | Proposed | No field of any node the plugin ships holds an effective or defaulted value. | |
 | req-fedramp-20x-vdr-effective-2 | Null Reads As Worst Case | Proposed | In the shipped Searches an evaluation with all factors `null` is treated as likely exploitable, internet-reachable, N5. | |
 | req-fedramp-20x-vdr-effective-3 | Class Is Assumed Visibly | Proposed | The class input defaults to `d` and the shipped Searches that use it say so in their description. | |
-| req-fedramp-20x-vdr-effective-4 | Setting A Factor Never Removes A Deadline | Proposed | An evaluation with any factor set, with or without evidence, still appears in every deadline Search with the worst-case row applied, and is also listed in the "evaluated" Search with its deadline marked as the worst-case bound. | Closes the fail-open path found in review of the first draft. |
-| req-fedramp-20x-vdr-effective-6 | Evidence Makes A Factor Count | Proposed | In every incident Search, a non-null factor reads as `null` unless all three hold: an evidence edge for that factor exists, the evaluated finding also cites that evidence through `CITES_COMPLIANCE_EVIDENCE`, and `evaluator` and `evaluated_at` are set. | See `req-fedramp-20x-vdr-incidents-5` and `req-fedramp-20x-vdr-evidence-5`, which is part of this test and not only an audit. Test: only the factor edge exists, and the factor still reads as `null`. |
-| req-fedramp-20x-vdr-effective-8 | Searches Read One Scheme | Proposed | Every shipped deadline and incident Search takes a `$scheme` input, default `max`, and filters on the evaluation's `scheme` column, never on the `vdr.scheme` dimension; none mixes schemes. A node whose dimension disagrees with its column is still placed by its column, so a mismatch cannot hide an evaluation or put another scheme's into the default Search. | Comparing schemes is a Search over two schemes, not a side effect of one. |
+| req-fedramp-20x-vdr-effective-4 | Setting A Factor Never Removes A Deadline | Implemented | An evaluation with any factor set, with or without evidence, still appears in every deadline Search with the worst-case row applied, and is also listed in the "evaluated" Search with its deadline marked as the worst-case bound. | Closes the fail-open path found in review of the first draft. |
+| req-fedramp-20x-vdr-effective-6 | Evidence Makes A Factor Count | Implemented | In every incident Search, a non-null factor reads as `null` unless all three hold: an evidence edge for that factor exists, the evaluated finding also cites that evidence through `CITES_COMPLIANCE_EVIDENCE`, and `evaluator` and `evaluated_at` are set. | See `req-fedramp-20x-vdr-incidents-5` and `req-fedramp-20x-vdr-evidence-5`, which is part of this test and not only an audit. Test: only the factor edge exists, and the factor still reads as `null`. |
+| req-fedramp-20x-vdr-effective-8 | Searches Read One Scheme | Implemented | Every shipped deadline and incident Search takes a `$scheme` input, default `max`, and filters on the evaluation's `scheme` column, never on the `vdr.scheme` dimension; none mixes schemes. A node whose dimension disagrees with its column is still placed by its column, so a mismatch cannot hide an evaluation or put another scheme's into the default Search. | Comparing schemes is a Search over two schemes, not a side effect of one. |
 | req-fedramp-20x-vdr-effective-7 | Raw Factors Are Not Answers | Proposed | Shipped pages, panels and Searches read the effective values only through the shipped Searches; none reads a `vdr_evaluation` factor field directly. | A review item for every consumer. |
 | req-fedramp-20x-vdr-effective-5 | Worst Case Is A Bound | Implemented | A test over the seeded rows shows that, for every class, lowering PAIN or moving the exposure from `lev_irv` toward `nlev` never shortens `hours`. | Observed property of the tables as read; the test fails if a future table breaks it. |
 
@@ -371,13 +371,13 @@ FedRAMP publishes the PAIN vocabulary (N1 to N5) and the remediation matrix, and
 ----
 RID: `req-fedramp-20x-vdr-deadlines`
 
-Status: `Proposed`
+Status: `Implemented`
 
 Three clocks matter and each runs from a different instant. The evaluation deadline (VER-TFR-EVU) runs from detection: the provider should evaluate every vulnerability within 14, 7, 5 or 2 days for class A, B, C or D. The remediation deadline (VDR-TFR-PVR) is stated "from evaluation", and a vulnerability not fully mitigated or remediated within 192 days of evaluation is an accepted vulnerability (VER-TFR-MAV). The clock does not restart when PAIN is lowered (ruled 2026-10-16). The **exact** deadline of an evaluated finding therefore counts from `evaluated_at`, as the rules state, using the timeframe row for that finding's own effective factors; that computation is the partly evaluated Backlog item. The **v0 deadline** is a bound that is never later than the exact one: for every finding, evaluated or not, it counts from `first_detected_at` (the earliest possible anchor, because an evaluation cannot precede detection) and applies the worst-case row.
 
 #### Implementation
 
-Deadlines are shipped as Searches, computed on read, never stored. Detection time is `first_detected_at` on `compliance_finding` (Issue# 43 - compliance-core-tap). Adding an interval to a date and comparing with the current time is the Gryphon capability of Issue# 1064 - tap. Until both land, this requirement stays `Proposed` and the Searches are not shipped.
+Deadlines are shipped as one `module` Search runner, `vdr-deadlines` (`tap_plugin/fedramp_20x_vdr/searches/clocks.py`), whose `view` input selects one of the Searches below; the instance's Search nodes name the runner and set the view. It is computed on read, never stored. Detection time is `first_detected_at` on `compliance_finding` (available since `compliance_core` v0.8.4, Issue# 43 - compliance-core-tap). The runner does the date arithmetic itself, from the open evaluations of one scheme (`scheme`, default `max`), with the class (`fedramp_class`, default `d`, reported as assumed) and the comparison instant (`now`, default the present) as inputs. Gryphon's temporal offset (Issue# 1064 - tap) was verified to work on 2026-10-21 but is not used: the evidence-backed factors the incident Searches need are already one function (`backed_factors`), and a runner keeps both Searches on one code path.
 
 | Search | Meaning |
 | --- | --- |
@@ -394,37 +394,37 @@ Every Search above uses the v0 bound defined in the paragraph before this table,
 
 | ACID | Title | Status | Description | Notes |
 | --- | --- | :---: | --- | --- |
-| req-fedramp-20x-vdr-deadlines-1 | Computed On Read | Proposed | No deadline, overdue flag or remaining-time value is stored on any node. | |
-| req-fedramp-20x-vdr-deadlines-2 | Class D Worst Case | Proposed | For a finding detected at time t, the remediation deadline in v0 is t plus 12 hours. | The class D, N5, LEV and IRV cell. |
-| req-fedramp-20x-vdr-deadlines-3 | Unobserved Detection Is Listed | Proposed | A finding with null `first_detected_at` appears in the "detection time unobserved" Search and in no overdue Search. | |
-| req-fedramp-20x-vdr-deadlines-4 | Bound Stated, Anchor Is Detection | Proposed | Each remediation and acceptance Search counts from `first_detected_at` for every finding, evaluated or not, applies the worst-case row, and its description says it is a bound. | Anchoring an evaluated finding on `evaluated_at` with the worst-case row is non-conformant. |
-| req-fedramp-20x-vdr-deadlines-6 | A Timestamp Does Not Complete An Evaluation | Proposed | An evaluation with `evaluated_at` set but a factor null, unsupported or (in v0) `pain` unset still appears in the evaluation-overdue Search once past its evaluation deadline. | Closes the timestamp-only bypass found in review. |
-| req-fedramp-20x-vdr-deadlines-5 | Blocked Until The Dependencies Land | Proposed | The Searches are not shipped until `first_detected_at` and date arithmetic exist. | Issue# 43 - compliance-core-tap, Issue# 1064 - tap. |
+| req-fedramp-20x-vdr-deadlines-1 | Computed On Read | Implemented | No deadline, overdue flag or remaining-time value is stored on any node. | |
+| req-fedramp-20x-vdr-deadlines-2 | Class D Worst Case | Implemented | For a finding detected at time t, the remediation deadline in v0 is t plus 12 hours. | The class D, N5, LEV and IRV cell. |
+| req-fedramp-20x-vdr-deadlines-3 | Unobserved Detection Is Listed | Implemented | A finding with null `first_detected_at` appears in the "detection time unobserved" Search and in no overdue Search. | |
+| req-fedramp-20x-vdr-deadlines-4 | Bound Stated, Anchor Is Detection | Implemented | Each remediation and acceptance Search counts from `first_detected_at` for every finding, evaluated or not, applies the worst-case row, and its description says it is a bound. | Anchoring an evaluated finding on `evaluated_at` with the worst-case row is non-conformant. |
+| req-fedramp-20x-vdr-deadlines-6 | A Timestamp Does Not Complete An Evaluation | Implemented | An evaluation with `evaluated_at` set but a factor null, unsupported or (in v0) `pain` unset still appears in the evaluation-overdue Search once past its evaluation deadline. | Closes the timestamp-only bypass found in review. |
+| req-fedramp-20x-vdr-deadlines-5 | Dependencies Landed | Implemented | `first_detected_at` exists on `compliance_finding` and the runner does the date arithmetic, so the Searches ship. | Issue# 43 - compliance-core-tap (v0.8.4). The runner is registered as `tap_plugin.fedramp_20x_vdr.searches.clocks:vdr-deadlines`. |
 
 ### Reportable Incidents
 ----
 RID: `req-fedramp-20x-vdr-incidents`
 
-Status: `Proposed`
+Status: `Implemented`
 
 FedRAMP lets a provider treat certain vulnerabilities as reportable incidents until they are partly mitigated. Under VER-TFR-IRI an internet-reachable, likely exploitable vulnerability with PAIN above N3 is one; under VER-TFR-NRI a likely exploitable vulnerability that is not internet-reachable at N5 is one. The first is stated as "SHOULD" for classes C and D and "MAY" for A and B; the second is "SHOULD" for class D and "MAY" otherwise. Under the worst case every finding in the cohort is a reportable incident at class D, and the Search shows that.
 
 #### Implementation
 
-Two Searches over **every** open evaluation, taking the same class input as the deadlines. Neither needs a timeframe row, so the partly evaluated case is computed exactly, with the null cases written as `IS NULL OR`. The first returns evaluations whose effective factors are likely exploitable (`likely_exploitable` null or true), internet-reachable (`internet_reachable` null or true) and PAIN above N3 (`pain` null or in N4, N5). The second returns those likely exploitable, with `internet_reachable` false, and effective PAIN N5 (`pain` null or N5). Under the all-null worst case only the first returns rows; the second returns rows once an `internet_reachable` of false is recorded. Each Search states whether the class makes the rule a SHOULD or a MAY.
+Two Searches, the `view` values `internet_reachable` and `non_internet_reachable` of one `module` runner, `vdr-incidents` (`searches/clocks.py`), over **every** open evaluation of one scheme, taking the same class input as the deadlines. Neither needs a timeframe row, so the partly evaluated case is computed exactly: a factor reads as unset (null) unless evidence backs it. The first returns evaluations whose effective factors are likely exploitable (`likely_exploitable` null or true), internet-reachable (`internet_reachable` null or true) and PAIN above N3 (`pain` null or in N4, N5). The second returns those likely exploitable, with `internet_reachable` false, and effective PAIN N5 (`pain` null or N5). Under the all-null worst case only the first returns rows; the second returns rows once an `internet_reachable` of false is recorded. Each Search states whether the class makes the rule a SHOULD or a MAY.
 
-**Unsupported factors read as null.** The incident Searches count a factor as set only when evidence backs it (`req-fedramp-20x-vdr-effective`, "A factor counts as set only when evidence backs it"). An unsupported value therefore cannot take an evaluation out of an incident Search; it stays in as if the factor were null, and `req-fedramp-20x-vdr-evidence-3` additionally reports it. This guarantee is a ship condition, not a best effort: the incident Searches ship only as one query that applies it (`req-fedramp-20x-vdr-incidents-6`). In v0 a PAIN value cannot be evidence-backed, so it always reads as N5 and the N3 transition out of the first Search is deferred with PAIN evidence (`req-fedramp-20x-vdr-low-pain` and the PAIN basis list).
+**Unsupported factors read as null.** The incident Searches count a factor as set only when evidence backs it (`req-fedramp-20x-vdr-effective`, "A factor counts as set only when evidence backs it"). An unsupported value therefore cannot take an evaluation out of an incident Search; it stays in as if the factor were null, and `req-fedramp-20x-vdr-evidence-3` additionally reports it. This guarantee is a ship condition, not a best effort: each incident Search is one runner that applies it (`req-fedramp-20x-vdr-incidents-6`). In v0 a PAIN value cannot be evidence-backed, so it always reads as N5 and the N3 transition out of the first Search is deferred with PAIN evidence (`req-fedramp-20x-vdr-low-pain` and the PAIN basis list).
 
 #### Acceptance Criteria
 
 | ACID | Title | Status | Description | Notes |
 | --- | --- | :---: | --- | --- |
-| req-fedramp-20x-vdr-incidents-1 | Worst Case Is An Incident | Proposed | With the default class, every all-null evaluation appears in the internet-reachable incident Search. | |
-| req-fedramp-20x-vdr-incidents-2 | Threshold Is Above N3 | Proposed | The internet-reachable Search requires effective PAIN greater than N3, and the other requires N5. | |
-| req-fedramp-20x-vdr-incidents-3 | Modal Stated | Proposed | Each Search description says whether the rule is a SHOULD or a MAY for the class in use. | |
-| req-fedramp-20x-vdr-incidents-4 | Partly Evaluated Is Computed | Proposed | An evaluation with an evidence-backed factor is placed by its effective values: `likely_exploitable` of false removes it from both Searches; `internet_reachable` of false moves a likely exploitable N5 from the first Search into the second. | PAIN transitions wait for a PAIN basis list. |
-| req-fedramp-20x-vdr-incidents-5 | Unsupported Factor Reads As Null | Proposed | An evaluation with `likely_exploitable` of false, or `internet_reachable` of false, and no evidence edge for that factor still appears in the first Search. A `pain` value always reads as N5 in v0. | Verified by a test that writes the value without the edge. |
-| req-fedramp-20x-vdr-incidents-6 | One Query Or Not Shipped | Proposed | The incident Searches are shipped only as single queries that apply the evidence test; if Gryphon cannot express it, they are not shipped and the gap is raised as a Gryphon capability request. | A pair of Searches that depends on a page showing both is not conformant. |
+| req-fedramp-20x-vdr-incidents-1 | Worst Case Is An Incident | Implemented | With the default class, every all-null evaluation appears in the internet-reachable incident Search. | |
+| req-fedramp-20x-vdr-incidents-2 | Threshold Is Above N3 | Implemented | The internet-reachable Search requires effective PAIN greater than N3, and the other requires N5. | |
+| req-fedramp-20x-vdr-incidents-3 | Modal Stated | Implemented | Each Search description says whether the rule is a SHOULD or a MAY for the class in use. | |
+| req-fedramp-20x-vdr-incidents-4 | Partly Evaluated Is Computed | Implemented | An evaluation with an evidence-backed factor is placed by its effective values: `likely_exploitable` of false removes it from both Searches; `internet_reachable` of false moves a likely exploitable N5 from the first Search into the second. | PAIN transitions wait for a PAIN basis list. |
+| req-fedramp-20x-vdr-incidents-5 | Unsupported Factor Reads As Null | Implemented | An evaluation with `likely_exploitable` of false, or `internet_reachable` of false, and no evidence edge for that factor still appears in the first Search. A `pain` value always reads as N5 in v0. | Verified by a test that writes the value without the edge. |
+| req-fedramp-20x-vdr-incidents-6 | One Search Applies The Test | Implemented | Each incident Search is a single Search that applies the evidence test itself, through `backed_factors`; no page has to show two Searches to get the right answer. | Whether Gryphon can express the test in one query was not established; the runner is the single Search instead (decided 2026-10-21 so the Searches are ready for the demo). A pair of Searches that depends on a page showing both is not conformant. |
 
 ### v0 Non-Goals
 ----
@@ -436,7 +436,7 @@ The plugin does not, in v0:
 
 - ship pages, panels or a layout; the Searches are the surface other pages read;
 - mint findings, vulnerabilities, scanners or scan runs, or store a detection time (compliance_core owns them; Issue# 43 - compliance-core-tap);
-- compute dates itself (Gryphon owns that; Issue# 1064 - tap);
+- store a date: the deadline Searches compute dates on read in the runner, and no node holds one;
 - evaluate a finding that has no vulnerability edge, or a resolved one;
 - compute the exact deadline for an evaluation with any factor set; v0 shows the worst-case bound (`req-fedramp-20x-vdr-partial`);
 - store PAIN, an owner, an effective profile or a roll-up: the reach computes on read (`req-fedramp-20x-vdr-reach`) and a method plugin computes the level;

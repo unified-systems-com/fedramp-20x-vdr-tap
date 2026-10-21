@@ -37,3 +37,31 @@ def deadline_hours(fedramp_class: str, pain: str, column: str, *, db_alias: str 
     if row is None:
         raise LookupError(f"no {RULE} timeframe row for class {fedramp_class}, {pain}, {column}; the seed is incomplete")
     return int(row.hours)
+
+
+EVALUATION_RULE = "VER-TFR-EVU"
+ACCEPTANCE_RULE = "VER-TFR-MAV"
+ACCEPTANCE_CLASS = "all"
+
+
+def _rule_hours(rule: str, fedramp_class: str, *, db_alias: str) -> int:
+    row = (
+        read_scope.node_relation(read_scope.DEFAULT_SCOPE, VdrTimeframe, db_alias=db_alias)
+        .filter(rule=rule, fedramp_class=fedramp_class, pain="", exposure="")
+        .first()
+    )
+    if row is None:
+        raise LookupError(f"no {rule} timeframe row for class {fedramp_class}; the seed is incomplete")
+    return int(row.hours)
+
+
+def evaluation_hours(fedramp_class: str, *, db_alias: str = "default") -> int:
+    """Hours from detection within which a vulnerability should be evaluated (`VER-TFR-EVU`) for the class."""
+    if fedramp_class not in CLASSES:
+        raise ValueError(f"{fedramp_class!r} is not a FedRAMP class; expected one of {', '.join(CLASSES)}")
+    return _rule_hours(EVALUATION_RULE, fedramp_class, db_alias=db_alias)
+
+
+def acceptance_hours(*, db_alias: str = "default") -> int:
+    """Hours after which a vulnerability not mitigated or remediated is an accepted vulnerability (`VER-TFR-MAV`)."""
+    return _rule_hours(ACCEPTANCE_RULE, ACCEPTANCE_CLASS, db_alias=db_alias)
