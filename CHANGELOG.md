@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.1.3](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/compare/v0.1.2...v0.1.3) (2026-10-21)
+
+
+### Features
+
+* **fedramp_20x_vdr:** the deadline and incident Searches ([1b6427b](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/1b6427bb710ee8b304c6a62137c4576f09b5ac3f))
+* **fedramp_20x_vdr:** the deadline and incident Searches ([2e9faa1](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/2e9faa10c9b24274ee3f3e4b8acd6f57389145f5))
+
+
+### Bug Fixes
+
+* **fedramp_20x_vdr:** validate the clock Searches' inputs; most overdue first ([670c713](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/670c7135cd8e2a5c84e912c079c306473602a10b))
+
+
+### Documentation
+
+* **fedramp_20x_vdr:** bring the requirement table in line with the clock Searches ([d597137](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/d5971377e133028f260622d6b2c1796b1e2f4694))
+* **fedramp_20x_vdr:** the deadlines row no longer depends on Gryphon date arithmetic ([343c749](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/343c74982c4bfcd0baee68698547461eb1f1894a))
+
 ## [0.1.2](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/compare/v0.1.1...v0.1.2) (2026-10-21)
 
 
