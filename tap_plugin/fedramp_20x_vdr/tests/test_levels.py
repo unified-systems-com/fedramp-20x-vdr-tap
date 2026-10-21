@@ -57,6 +57,16 @@ class TestLevels:
     def test_the_exposure_column(self, likely: bool, reachable: bool, column: str) -> None:
         assert levels.exposure_column(likely, reachable) == column
 
+    @pytest.mark.spec("req-fedramp-20x-vdr-pain-3")
+    @pytest.mark.parametrize(
+        ("likely", "reachable", "column"),
+        [(None, None, "lev_irv"), (None, False, "lev_nirv"), (None, True, "lev_irv"), (True, None, "lev_irv"), (False, None, "nlev"), (True, False, "lev_nirv")],
+    )
+    def test_an_unknown_factor_reads_as_true_so_unknown_never_picks_a_lenient_column(
+        self, likely: bool | None, reachable: bool | None, column: str
+    ) -> None:
+        assert levels.exposure_column(likely, reachable) == column
+
     @pytest.mark.spec("req-fedramp-20x-vdr-pain-8")
     def test_the_module_ships_no_formula_weight_or_threshold(self) -> None:
         source = LEVELS_FILE.read_text()

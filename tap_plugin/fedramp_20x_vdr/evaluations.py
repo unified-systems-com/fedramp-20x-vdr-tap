@@ -3,7 +3,8 @@
 A method that lets evidence override its own signals needs to tell "no evidence" from "evidence says true", which the
 effective value (an unbacked factor reads as the worst case) cannot. `backed_factors` returns, for each finding and each of
 `likely_exploitable` and `internet_reachable`, `True`, `False` or `None`, where `None` means no evidence backs a value. The
-effective value is that value with `None` read as `True`, so the two never disagree.
+effective value is that value with `None` read as `True`, so the two never disagree. If two evaluations of one scheme
+point at one finding and disagree, the worst case (`True`) wins.
 
 A factor is backed only when all three hold, the rule of `req-fedramp-20x-vdr-effective-6`: the evaluation's factor is not
 null, an evidence edge for that factor runs from the evaluation, the finding also cites that evidence, and `evaluator`
@@ -73,8 +74,10 @@ def backed_factors(
             continue
         for factor in FACTORS:
             value = getattr(row, factor)
-            if value is None or out[finding][factor] is not None:
+            if value is None:
                 continue
             if factor_evidence[(evaluation_id, factor)] & cited_by_finding[finding]:
-                out[finding][factor] = bool(value)
+                # A finding has one evaluation per scheme by its key; if two ever point at one finding and disagree,
+                # the worst case wins, so a backed True is never hidden by a backed False.
+                out[finding][factor] = bool(value) or bool(out[finding][factor])
     return out

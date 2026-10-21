@@ -137,5 +137,19 @@ def test_every_requested_finding_is_answered_and_the_effective_value_is_none_rea
 
 
 @pytest.mark.spec("req-fedramp-20x-vdr-pain-9")
+def test_if_two_evaluations_of_one_scheme_disagree_the_worst_case_wins() -> None:
+    finding = _finding("a")
+    evidence = _evidence()
+    create_edge(finding, evidence, CITES_FINDING, {"support_kind": "informational"})
+    for key, value in (("a", False), ("a-second", True)):
+        evaluation = _node(
+            EVALUATION, {"finding_source": "t", "finding_source_key": key, "scheme": "max", "likely_exploitable": value, **WHO}
+        )
+        create_edge(evaluation, finding, EVALUATES)
+        _cite_factor(evaluation, evidence, "likely_exploitable")
+    assert _both(finding)["likely_exploitable"] is True
+
+
+@pytest.mark.spec("req-fedramp-20x-vdr-pain-9")
 def test_no_findings_is_an_empty_answer() -> None:
     assert backed_factors([]) == {}

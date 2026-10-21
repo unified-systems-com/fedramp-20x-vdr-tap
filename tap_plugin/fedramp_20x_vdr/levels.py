@@ -32,11 +32,15 @@ def level_rank(level: str) -> int:
         raise ValueError(f"{level!r} is not a PAIN level; expected one of {', '.join(LEVELS)}") from None
 
 
-def exposure_column(likely_exploitable: bool, internet_reachable: bool) -> str:
-    """The column a finding falls in. Not likely exploitable is `nlev` whatever its reachability."""
-    if not likely_exploitable:
+def exposure_column(likely_exploitable: bool | None, internet_reachable: bool | None) -> str:
+    """The column a finding falls in. Not likely exploitable is `nlev` whatever its reachability.
+
+    An unknown (`None`) factor reads as true, the worst case: unknown never selects a lenient column
+    (`req-fedramp-20x-vdr-pain-3`). Pass `backed_factors` values straight in; only an evidence-backed `False` lowers it.
+    """
+    if likely_exploitable is not None and not likely_exploitable:
         return COLUMN_NLEV
-    return COLUMN_LEV_IRV if internet_reachable else COLUMN_LEV_NIRV
+    return COLUMN_LEV_NIRV if internet_reachable is not None and not internet_reachable else COLUMN_LEV_IRV
 
 
 def reduce_profiles(profiles: Iterable[Profile | None]) -> tuple[str, str, str]:

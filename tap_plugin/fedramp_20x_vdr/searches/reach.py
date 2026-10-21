@@ -12,12 +12,14 @@ container's programs involved. The programs an operating system holds are not th
 profile by nature, so counting them would make every container High). A finding on a library follows `LOADS_LIBRARY`. A
 finding the grid cannot tie to a container or a program yields one row with no owner, so the gap shows; nothing is dropped.
 
-The row: `finding_id`, `vuln_id`, `component`, `owner_kind` (`program`, `container` or `none`), `owner_id`, `owner`,
+The row: `finding_id`, `vuln_id`, `component`, `component_id`, `owner_kind` (`program`, `container` or `none`), `owner_id`, `owner`,
 `container_id`, `container` and `programs` (the `{id, name}` of every program involved). Open findings with a
 `CONCERNS_COMPLIANCE_VULNERABILITY` edge only, the set the VDR-max collector covers. The work is proportional to the edges
 of the five types it follows, which it reads in bulk; it has not been measured on a large grid.
 
-Inputs: `entity_id` (optional, one finding) and `max_results` (1 to 5000, default 1000).
+Inputs: `entity_id` (optional, one finding) and `max_results` (1 to 5000). `reach_rows` returns every row unless
+`max_results` is given, so a method plugin importing it never loses a finding silently. The Search runner defaults
+`max_results` to 1000 and reports the exact number of rows it left out in its `warnings`.
 """
 
 from __future__ import annotations
@@ -48,12 +50,14 @@ DEFAULT_MAX_RESULTS = 1000
 MAX_RESULTS = 5000
 
 
-def _inputs(inputs: dict[str, Any]) -> tuple[str | None, int]:
+def _inputs(inputs: dict[str, Any]) -> tuple[str | None, int | None]:
     entity_id = inputs.get("entity_id")
     if entity_id is not None and (not isinstance(entity_id, str) or not entity_id):
         raise ValueError("entity_id must be a non-empty string when given")
-    max_results = inputs.get("max_results", DEFAULT_MAX_RESULTS)
-    if isinstance(max_results, bool) or not isinstance(max_results, int) or not 1 <= max_results <= MAX_RESULTS:
+    max_results = inputs.get("max_results")
+    if max_results is not None and (
+        isinstance(max_results, bool) or not isinstance(max_results, int) or not 1 <= max_results <= MAX_RESULTS
+    ):
         raise ValueError(f"max_results must be an integer from 1 to {MAX_RESULTS}")
     return entity_id, max_results
 
@@ -81,7 +85,10 @@ def _reach(starts: Iterable[str], step: dict[str, set[str]]) -> set[str]:
 
 
 def reach_rows(inputs: dict[str, Any] | None = None, *, db_alias: str = "default") -> list[dict[str, Any]]:
-    """The reach rows for the open, vulnerability-linked findings, in a stable order. See the module docstring."""
+    """The reach rows for the open, vulnerability-linked findings, in a stable order. See the module docstring.
+
+    Every row is returned unless `max_results` is given in `inputs`.
+    """
     entity_id, max_results = _inputs(inputs or {})
     scope = read_scope.DEFAULT_SCOPE
 
@@ -168,9 +175,15 @@ def reach_rows(inputs: dict[str, Any] | None = None, *, db_alias: str = "default
     for finding in findings:
         vuln_id = sorted(vulns[finding])[0]
         finding_carriers = sorted(carriers.get(finding, ()))
-        produced = False
+        no_owner: list[str | None] = []  # components the grid could not tie to a container or program
         for carrier in finding_carriers:
-            base = {"finding_id": finding, "vuln_id": vuln_id, "component": names.get(carrier, "")}
+            produced = False
+            base = {
+                "finding_id": finding,
+                "vuln_id": vuln_id,
+                "component": names.get(carrier, ""),
+                "component_id": carrier,
+            }
             if carrier in packages:
                 for host in sorted(hosts_of.get(carrier, ())):
                     for container in sorted(containers_of_host.get(host, ())):
@@ -192,13 +205,17 @@ def reach_rows(inputs: dict[str, Any] | None = None, *, db_alias: str = "default
                     for container in running or [None]:
                         rows.append(_row(base, "program", program, names, container, [program_ref(program)]))
                         produced = True
-        if not produced:
-            component = names.get(finding_carriers[0], "") if finding_carriers else ""
+            if not produced:
+                no_owner.append(carrier)
+        if not finding_carriers:
+            no_owner.append(None)
+        for carrier in no_owner:
             rows.append(
                 {
                     "finding_id": finding,
                     "vuln_id": vuln_id,
-                    "component": component,
+                    "component": names.get(carrier, "") if carrier else "",
+                    "component_id": carrier,
                     "owner_kind": "none",
                     "owner_id": None,
                     "owner": None,
@@ -209,7 +226,7 @@ def reach_rows(inputs: dict[str, Any] | None = None, *, db_alias: str = "default
             )
     rows = _dedupe(rows)
     rows.sort(key=lambda r: (r["finding_id"], r["container_id"] or "", r["owner_kind"], r["owner_id"] or ""))
-    return rows[:max_results]
+    return rows if max_results is None else rows[:max_results]
 
 
 def _row(
@@ -232,11 +249,15 @@ def _row(
 
 
 def _dedupe(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """One row per finding, component, owner and container: a package carried twice or reached by two paths counts once."""
+    """One row per finding, component, owner and container: a package carried twice or reached by two paths counts once.
+
+    The component is keyed by its node id, never its name, so two packages of one name (another version or ecosystem) stay
+    two rows.
+    """
     seen: set[tuple[Any, ...]] = set()
     out: list[dict[str, Any]] = []
     for row in rows:
-        key = (row["finding_id"], row["component"], row["owner_kind"], row["owner_id"], row["container_id"])
+        key = (row["finding_id"], row["component_id"], row["owner_kind"], row["owner_id"], row["container_id"])
         if key not in seen:
             seen.add(key)
             out.append(row)
@@ -248,5 +269,17 @@ def vdr_reach(search: Search, inputs: dict[str, Any], *, db_alias: str, layer: s
 
     req-fedramp-20x-vdr-reach-13
     """
-    rows = reach_rows(inputs, db_alias=db_alias)
-    return {"nodes": [], "edges": [], "rows": rows, "info": {"row_count": len(rows)}, "warnings": {}}
+    entity_id, max_results = _inputs(inputs)
+    limit = DEFAULT_MAX_RESULTS if max_results is None else max_results
+    everything = reach_rows({"entity_id": entity_id} if entity_id is not None else {}, db_alias=db_alias)
+    rows = everything[:limit]
+    warnings: dict[str, Any] = {}
+    if len(everything) > len(rows):
+        warnings["rows_omitted"] = [f"{len(everything) - len(rows)} of {len(everything)} rows were left out; max_results is {limit}"]
+    return {
+        "nodes": [],
+        "edges": [],
+        "rows": rows,
+        "info": {"row_count": len(rows), "total_rows": len(everything)},
+        "warnings": warnings,
+    }

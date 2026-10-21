@@ -256,7 +256,7 @@ class TestOwnership:
         _edge(w.container("x", host), "RUNS_PROGRAM", program)
         w.finding(pkg)
         rows = reach_rows()
-        assert all(set(r) >= {"programs", "container_id", "container", "owner_kind"} for r in rows)
+        assert all(set(r) >= {"programs", "container_id", "container", "owner_kind", "component_id"} for r in rows)
         json.dumps(rows)
 
 
@@ -341,9 +341,31 @@ class TestScope:
             reach_rows(bad)
 
     @pytest.mark.spec("req-fedramp-20x-vdr-reach-1")
-    def test_entity_id_and_max_results_limit_the_rows(self) -> None:
+    def test_entity_id_limits_the_rows_and_the_library_function_returns_everything_by_default(self) -> None:
         w = World()
         a, b = w.package("a"), w.package("b")
         fa, _fb = w.finding(a), w.finding(b)
         assert {r["finding_id"] for r in reach_rows({"entity_id": str(fa.pk)})} == {str(fa.pk)}
+        assert len(reach_rows()) == 2
         assert len(reach_rows({"max_results": 1})) == 1
+
+    @pytest.mark.spec("req-fedramp-20x-vdr-reach-11")
+    def test_the_runner_says_how_many_rows_it_left_out(self) -> None:
+        w = World()
+        for name in ("a", "b", "c"):
+            w.finding(w.package(name))
+        out = vdr_reach(Search(), {"max_results": 1}, db_alias="default")
+        assert len(out["rows"]) == 1 and out["info"] == {"row_count": 1, "total_rows": 3}
+        assert out["warnings"]["rows_omitted"] == ["2 of 3 rows were left out; max_results is 1"]
+        full = vdr_reach(Search(), {}, db_alias="default")
+        assert len(full["rows"]) == 3 and full["warnings"] == {}
+
+    @pytest.mark.spec("req-fedramp-20x-vdr-reach-1")
+    def test_two_components_with_one_name_are_two_rows(self) -> None:
+        w = World()
+        one = _node(C + "package", {"ecosystem": "pypi", "name": "dup", "version": "1.0"})
+        two = _node(C + "package", {"ecosystem": "pypi", "name": "dup", "version": "2.0"})
+        finding = w.finding(one, "f-dup")
+        create_edge(two, finding, CARRIES)
+        rows = _by(reach_rows(), finding)
+        assert sorted(r["component_id"] for r in rows) == sorted([str(one.pk), str(two.pk)])
