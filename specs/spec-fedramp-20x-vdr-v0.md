@@ -307,7 +307,7 @@ The unit is one **finding on one owner**. A finding is already one vulnerability
 
 **A library.** A finding on a library belongs to the programs that `LOADS_LIBRARY` it, one row each. A library no program loads has no container route in the grid (the vocabulary has no host-to-library edge) and yields one row with no owner and no programs, so the gap shows. A package's `SHIPS_LIBRARY` is not followed in this version.
 
-**The row.** `finding_id`, `vuln_id`, `component`, `owner_kind` (`program`, `container` or `none`), `owner_id`, `owner`, and `programs`, the list of `{id, name}` of every program involved (the owner alone for a program, the container's programs for a container, empty for `none`). Open findings with a `CONCERNS_COMPLIANCE_VULNERABILITY` edge only, the set the VDR-max collector covers.
+**The row.** `finding_id`, `vuln_id`, `component`, `owner_kind` (`program`, `container` or `none`), `owner_id`, `owner`, `container_id` and `container` (the container whose image host installs the package, carried even when the owner is a program, because a package is shared across hosts and the pair of owner and container is what makes a row unique; null for `none`), and `programs`, the list of `{id, name}` of every program involved (the owner alone for a program, the container's programs for a container, empty for `none`). Open findings with a `CONCERNS_COMPLIANCE_VULNERABILITY` edge only, the set the VDR-max collector covers.
 
 **The reduction.** `reduce_profiles(profiles)` in `tap_plugin/fedramp_20x_vdr/levels.py` takes a list of `(cr, ir, ar)` triples, each value `low`, `medium` or `high` or `None`, and returns one triple: per objective, the highest value, in the order low, medium, high. A `None`, and an empty list, count as high: an unclassified program raises the result, the fail-safe of the stair-step. The method reads each program's profile from its own stamp and calls the reducer; a method with another profile shape ignores it.
 
@@ -330,6 +330,7 @@ The unit is one **finding on one owner**. A finding is already one vulnerability
 | req-fedramp-20x-vdr-reach-11 | Nothing Is Stored | Proposed | The runner writes no node or edge, and nothing the plugin ships gains a field for an owner. | `req-fedramp-20x-vdr-effective-1`. |
 | req-fedramp-20x-vdr-reach-12 | Read Rules | Proposed | The runner reads through `tap_grid.gryphon.read_scope` with the caller's `db_alias`, and a tombstoned node contributes nothing. | As `dimension-coverage` in `compliance_core`. |
 | req-fedramp-20x-vdr-reach-13 | Importable And Keyed | Proposed | `reach_rows` is importable and the runner is registered as `tap_plugin.fedramp_20x_vdr.searches.reach:vdr-reach`. | The instance's Search pins this literal. |
+| req-fedramp-20x-vdr-reach-15 | Container Is Carried | Proposed | Every row carries `container_id` and `container`, including a row whose owner is a program, so one finding on one package in two containers is two rows even when the same program owns it in both; a row with `owner_kind` `none` carries them null. | The uniqueness of 'one row per finding per owner' (`reach-1`) rests on the pair. |
 | req-fedramp-20x-vdr-reach-14 | Dependency Floor | Proposed | `depends_on` and the dependency floor name `computing_core` 0.10.2, the first release that ships `RUNS_PACKAGE`. | |
 
 ### PAIN Levels And Deadlines
@@ -346,6 +347,8 @@ FedRAMP publishes the PAIN vocabulary (N1 to N5) and the remediation matrix, and
 
 **Reachability.** Internet reachable (IRV) is read from the finding's evaluation of one scheme (an input, default `max`; `req-fedramp-20x-vdr-effective-8`) through the rule of `req-fedramp-20x-vdr-effective-6`: an unset or unsupported factor, or a finding with no evaluation of that scheme, reads as true, and only an evidence-backed false reads as false. Nothing here computes reachability.
 
+**Backed factors.** A method that lets evidence override its own signals (the first, `stackarmor_vdr`, lets an evidence-backed `likely_exploitable` override KEV and EPSS, and does not let a null or unbacked one do so) needs the backed value, not the effective one. The plugin therefore exposes `tap_plugin.fedramp_20x_vdr.evaluations.backed_factors(finding_ids, *, scheme="max", db_alias)`, returning for each finding and each of `likely_exploitable` and `internet_reachable` the value `true`, `false` or `None`, where `None` means no evidence backs a value (no evaluation of that scheme, a null factor, or an unbacked one). The effective value of `req-fedramp-20x-vdr-effective` is that value with `None` read as true.
+
 **The deadline.** `tap_plugin/fedramp_20x_vdr/deadlines.py` exposes `deadline_hours(fedramp_class, pain, column, *, db_alias)`, which returns the `hours` of the `vdr_timeframe` row for the `VDR-TFR-PVR` rule, the class, the level and the column, and `None` for N1, for which FedRAMP publishes no timeframe (`req-fedramp-20x-vdr-low-pain`). The class defaults to `d` (`req-fedramp-20x-vdr-effective-3`). It returns hours, not dates: the clock anchor belongs to the deadlines requirement.
 
 **The contract for a method.** A method plugin returns, for each row of the reach, an N-level; it then calls `deadline_hours` and prints the row. It stores nothing, and `vdr_evaluation.pain` stays refused (`req-fedramp-20x-vdr-evaluation-6`) until a basis list for lowering PAIN exists.
@@ -361,6 +364,7 @@ FedRAMP publishes the PAIN vocabulary (N1 to N5) and the remediation matrix, and
 | req-fedramp-20x-vdr-pain-5 | Deadline From The Table | Proposed | `deadline_hours` returns the `vdr_timeframe` value for the class, level and column; for class D, N5 and `lev_irv` it is 12. | The 48 seeded `VDR-TFR-PVR` rows equal the memo's Appendix B (read 2026-10-20). |
 | req-fedramp-20x-vdr-pain-6 | No Timeframe For N1 | Proposed | `deadline_hours` returns `None` for N1, and a method row shows a null deadline, not zero. | |
 | req-fedramp-20x-vdr-pain-7 | Hours, Not Dates | Proposed | The function returns hours; no date arithmetic is done here. | The clock anchor is `req-fedramp-20x-vdr-deadlines`. |
+| req-fedramp-20x-vdr-pain-9 | Backed Value Or None | Proposed | `backed_factors` returns `true` or `false` for a factor only when the effective rule's evidence conditions hold, and `None` for a null, unbacked or missing one; the effective value is `None` read as true, so the two never disagree. | Lets a method treat unknown as 'no override' while the base still fails safe. |
 | req-fedramp-20x-vdr-pain-8 | A Method Supplies Only The Level | Proposed | The plugin ships no scoring formula, weight or threshold, and `vdr_evaluation.pain` stays refused. | The method plugin owns its math. |
 
 ### Deadlines
