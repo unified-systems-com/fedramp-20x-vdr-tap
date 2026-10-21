@@ -44,6 +44,7 @@ EVIDENCE_PAYLOAD = {
 EVALUATION_PAYLOAD = {
     "finding_source": FINDING_PAYLOAD["source"],
     "finding_source_key": FINDING_PAYLOAD["source_key"],
+    "scheme": "max",
 }
 
 
@@ -101,7 +102,7 @@ class TestNodes:
         assert node.entity.name == f"VDR {FINDING_PAYLOAD['source_key']}"
         assert node.entity.dimensions.get("fedramp.rule") == "vdr"
 
-    @pytest.mark.parametrize("missing", ["finding_source", "finding_source_key"])
+    @pytest.mark.parametrize("missing", ["finding_source", "finding_source_key", "scheme"])
     def test_the_finding_identity_is_required(self, missing: str) -> None:
         payload = {k: v for k, v in EVALUATION_PAYLOAD.items() if k != missing}
         assert not create_node(EVALUATION, payload).success

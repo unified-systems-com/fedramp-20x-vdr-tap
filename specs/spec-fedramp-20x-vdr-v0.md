@@ -49,7 +49,7 @@ FedRAMP's rules ask a provider to evaluate each detected vulnerability and then 
 | req-fedramp-20x-vdr-evidence | [Evidence For A Factor](#evidence-for-a-factor) | In Development | The evidence edge with its factor and basis, and the check that a factor is non-null only with one. |
 | req-fedramp-20x-vdr-timeframe | [Timeframe Rows](#timeframe-rows) | Implemented | `vdr_timeframe` and the seeded rows of the PVR tables, the evaluation deadlines and the acceptance limit. |
 | req-fedramp-20x-vdr-effective | [Worst-Case Semantics](#worst-case-semantics) | Proposed | What an unset factor and an unset class mean; computed, never stored. |
-| req-fedramp-20x-vdr-collector | [VDR-Max Collector](#vdr-max-collector) | In Development | One derived collector that gives every open, vulnerability-linked finding an all-null evaluation. |
+| req-fedramp-20x-vdr-collector | [VDR-Max Collector](#vdr-max-collector) | Implemented | One derived collector that gives every open, vulnerability-linked finding an all-null evaluation. |
 | req-fedramp-20x-vdr-coverage-snapshot | [Coverage Snapshot Collector](#coverage-snapshot-collector) | Implemented | One derived collector, a subclass of compliance_core's `SearchSnapshotCollector`, that records the classification-mapping summary hourly as a `compliance_search_snapshot`. |
 | req-fedramp-20x-vdr-reach | [Finding Reach](#finding-reach) | Proposed | The owner of each open finding (its program by the `RUNS_PACKAGE` closure, else its container) and the programs involved, with the fail-safe reduction of profiles. Importable and a `module` Search runner; computed on read; reads no profile. |
 | req-fedramp-20x-vdr-pain | [PAIN Levels And Deadlines](#pain-levels-and-deadlines) | Proposed | The ordered levels N1 to N5, the exposure column and `deadline_hours` from the timeframe rows, for any method plugin that supplies a level. |
@@ -99,15 +99,15 @@ The identity mirrors the finding's identity, plus the scheme, so that an evaluat
 
 | ACID | Title | Status | Description | Notes |
 | --- | --- | :---: | --- | --- |
-| req-fedramp-20x-vdr-evaluation-1 | Keyed By The Finding And Scheme | Proposed | `vdr_evaluation` declares `NATURAL_KEY = ("finding_source", "finding_source_key", "scheme")`; two writes for one finding and one scheme are one node, and one finding with two schemes has two nodes. | Was keyed by the finding alone (v0.1.0); changed 2026-10-21 so several algorithms can evaluate one finding. |
+| req-fedramp-20x-vdr-evaluation-1 | Keyed By The Finding And Scheme | Implemented | `vdr_evaluation` declares `NATURAL_KEY = ("finding_source", "finding_source_key", "scheme")`; two writes for one finding and one scheme are one node, and one finding with two schemes has two nodes. | Was keyed by the finding alone (v0.1.0); changed 2026-10-21 so several algorithms can evaluate one finding. |
 | req-fedramp-20x-vdr-evaluation-2 | Null Is Unobserved | Implemented | A factor, `evaluator`, `evaluated_at` or `rationale` that no writer set is stored as `null`, never as `false`, `N5` or an empty string. | |
 | req-fedramp-20x-vdr-evaluation-3 | Values Are Checked | Implemented | `pain` outside `N0` to `N5`, a non-boolean factor, or an `evaluated_at` that is not a date-time is refused. | |
 | req-fedramp-20x-vdr-evaluation-6 | Pain Stays Null In v0 | Implemented | A write that sets `pain` to a non-null value is refused in v0, because no PAIN evidence edge can exist (`req-fedramp-20x-vdr-evidence-6`); the refusal is lifted when the PAIN basis list is specified. | Write-time enforcement is possible here because it needs no edge. |
 | req-fedramp-20x-vdr-evaluation-4 | Key Matches The Finding | Proposed | A check reports any evaluation whose `finding_source` and `finding_source_key` differ from the `source` and `source_key` of the finding it evaluates; `scheme` is not compared. | Detection after the fact: an edge cannot be validated against a node's fields at write time. |
 | req-fedramp-20x-vdr-evaluation-5 | One Per Finding Per Scheme | Proposed | A check reports any finding with more than one `EVALUATES_COMPLIANCE_FINDING` edge pointing at it from evaluations of the same scheme. | |
-| req-fedramp-20x-vdr-evaluation-7 | Scheme Is In The Key | Proposed | `scheme` is a required column of 1 to 64 characters, free text; a write without it, with an empty one or with a longer one is refused. | George ruled 2026-10-21: free text, not a closed list. |
+| req-fedramp-20x-vdr-evaluation-7 | Scheme Is In The Key | Implemented | `scheme` is a required column of 1 to 64 characters, free text; a write without it, with an empty one or with a longer one is refused. | George ruled 2026-10-21: free text, not a closed list. |
 | req-fedramp-20x-vdr-evaluation-8 | Dimension Follows The Column | Proposed | Every evaluation and its edge carry `vdr.scheme` equal to the node's `scheme`; a check reports any that differ. | The dimension is a copy for display and filtering by a person; the column is the identity and the only thing a shipped Search reads (`effective-8`). The write is not rejected on a mismatch, because a dimension is stamped by the writer and cannot be validated against a column at write time; detection is the check. |
-| req-fedramp-20x-vdr-evaluation-9 | Existing Evaluations Become max | Proposed | The schema migration adds `scheme` and sets it to `max` on every evaluation that exists, and the collector's next run finds those rows by the new key and writes none beside them. | Without it the new key finds no match and the collector would add a second `max` evaluation for every finding. The migration also stamps `vdr.scheme: max` on those nodes and their edges. |
+| req-fedramp-20x-vdr-evaluation-9 | Existing Evaluations Become max | Implemented | The schema migration adds `scheme` and sets it to `max` on every evaluation that exists, and the collector's next run finds those rows by the new key and writes none beside them. | Without it the new key finds no match and the collector would add a second `max` evaluation for every finding. The migration also stamps `vdr.scheme: max` on those nodes and their edges. |
 
 ### Evidence For A Factor
 ----
@@ -223,7 +223,7 @@ In a Search the null case is written as `IS NULL OR = <value>`; no stored column
 ----
 RID: `req-fedramp-20x-vdr-collector`
 
-Status: `In Development`
+Status: `Implemented`
 
 The first stage starts from what the grid already holds. One derived collector reads the findings and writes an all-null evaluation for each, so that firing it once makes every current finding an entry at the worst case. Definition of done for v0: after one run, every open finding linked to a vulnerability has a `vdr_evaluation` of scheme `max` with `likely_exploitable`, `internet_reachable` and `pain` all `null`. Whether there are several collectors, or one configurable collector, is a later decision.
 
@@ -239,15 +239,15 @@ The collector needs no credentials and makes no external call.
 
 | ACID | Title | Status | Description | Notes |
 | --- | --- | :---: | --- | --- |
-| req-fedramp-20x-vdr-collector-1 | Every Linked Open Finding | Proposed | On a grid with no evaluations, after one run every open finding linked to a vulnerability has exactly one evaluation of scheme `max`, each with all three factors `null`. | The v0 definition of done. On a grid that already has evaluations, a run adds one only for each open linked finding without a `max` evaluation and changes none (`-2`, `-3`). Reworded for the scheme 2026-10-21, so it is `Proposed` until the build. |
+| req-fedramp-20x-vdr-collector-1 | Every Linked Open Finding | Implemented | On a grid with no evaluations, after one run every open finding linked to a vulnerability has exactly one evaluation of scheme `max`, each with all three factors `null`. | The v0 definition of done. On a grid that already has evaluations, a run adds one only for each open linked finding without a `max` evaluation and changes none (`-2`, `-3`). Reworded for the scheme 2026-10-21, so it is `Proposed` until the build. |
 | req-fedramp-20x-vdr-collector-2 | Idempotent | Implemented | A second run emits nothing and changes no node. | |
 | req-fedramp-20x-vdr-collector-3 | Never Overwrites | Implemented | An evaluation with a factor, `evaluator` or `evaluated_at` set is not re-emitted by a later run. | |
 | req-fedramp-20x-vdr-collector-4 | Unlinked Findings Skipped | Implemented | An open finding with no vulnerability edge receives no evaluation. | |
 | req-fedramp-20x-vdr-collector-5 | Writes Through GRIFT | Implemented | The collector submits one GRIFT batch and aborts on rejection. | |
 | req-fedramp-20x-vdr-collector-7 | Disagreeing Reads Stop The Run | Implemented | If the set of connected evaluations holds a key the set of existing evaluations lacks, which cannot be true, the run records `INCONSISTENT_READ`, fails and submits nothing; a Gryphon read that raises fails the run likewise. | An empty-looking "existing" read is the one way the no-overwrite guard could fail open. Found in review of PR# 5. |
-| req-fedramp-20x-vdr-collector-8 | Writes The max Scheme | Proposed | Every evaluation the collector writes has `scheme` `max` and the dimension `vdr.scheme: max`, on the node and on its edge. | George ruled 2026-10-21. |
-| req-fedramp-20x-vdr-collector-9 | Other Schemes Are Not Its Business | Proposed | An evaluation of another scheme for the same finding is not counted as an existing `max` evaluation, is not reconnected, and is never touched; a finding evaluated only by another scheme still gets its `max` evaluation. | Several schemes must coexist so they can be compared. |
-| req-fedramp-20x-vdr-collector-6 | Reconnects An Edge-Less Evaluation | Proposed | An evaluation of scheme `max` that exists but has no `EVALUATES_COMPLIANCE_FINDING` edge, for an open linked finding, gets that edge and nothing else; its node is not re-sent. | Every Search traverses the edge. Found in review of PR# 5. |
+| req-fedramp-20x-vdr-collector-8 | Writes The max Scheme | Implemented | Every evaluation the collector writes has `scheme` `max` and the dimension `vdr.scheme: max`, on the node and on its edge. | George ruled 2026-10-21. |
+| req-fedramp-20x-vdr-collector-9 | Other Schemes Are Not Its Business | Implemented | An evaluation of another scheme for the same finding is not counted as an existing `max` evaluation, is not reconnected, and is never touched; a finding evaluated only by another scheme still gets its `max` evaluation. | Several schemes must coexist so they can be compared. |
+| req-fedramp-20x-vdr-collector-6 | Reconnects An Edge-Less Evaluation | Implemented | An evaluation of scheme `max` that exists but has no `EVALUATES_COMPLIANCE_FINDING` edge, for an open linked finding, gets that edge and nothing else; its node is not re-sent. | Every Search traverses the edge. Found in review of PR# 5. |
 
 ### Coverage Snapshot Collector
 ----

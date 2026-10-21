@@ -31,10 +31,14 @@ class VdrEvaluation(BaseModel):
     ENTITY_TYPE: ClassVar[str] = "fedramp_20x_vdr__vdr_evaluation"
     # The finding evaluated, by the finding's own identity (compliance_core keys a finding on
     # ("source", "source_key")), copied verbatim into two columns so the evaluation is found
-    # again on any grid the finding is. A check reports an evaluation whose key and the key of
-    # the finding it EVALUATES disagree (req-fedramp-20x-vdr-evaluation-4); an edge cannot be
-    # validated against a node's fields when the node is written.
-    NATURAL_KEY: ClassVar[tuple[str, ...]] = ("finding_source", "finding_source_key")
+    # again on any grid the finding is, plus the scheme that made the evaluation, so several
+    # algorithms can evaluate one finding and be compared (req-fedramp-20x-vdr-evaluation-1).
+    # The scheme is a COLUMN because a dimension cannot be part of an identity; the dimension
+    # `vdr.scheme` is a copy stamped for display and filtering. A check reports an evaluation
+    # whose finding fields and the finding it EVALUATES disagree
+    # (req-fedramp-20x-vdr-evaluation-4); an edge cannot be validated against a node's fields
+    # when the node is written.
+    NATURAL_KEY: ClassVar[tuple[str, ...]] = ("finding_source", "finding_source_key", "scheme")
     ENTITY_NAME: ClassVar[str] = "VDR Evaluation"
     ENTITY_DESCRIPTION: ClassVar[str] = (
         "One finding's FedRAMP Vulnerability Detection and Response evaluation: likely exploitable, "
@@ -58,6 +62,7 @@ class VdrEvaluation(BaseModel):
     FIELD_CRUD_SCHEMA: ClassVar[dict[str, Any]] = {
         "finding_source": {"type": "string", "minLength": 1, "maxLength": 64},
         "finding_source_key": {"type": "string", "minLength": 1, "maxLength": 512},
+        "scheme": {"type": "string", "minLength": 1, "maxLength": 64},
         "likely_exploitable": _NULLABLE_BOOL,
         "internet_reachable": _NULLABLE_BOOL,
         # v0: PAIN stays null. No evidence basis for lowering PAIN exists, so a non-null value
@@ -72,7 +77,7 @@ class VdrEvaluation(BaseModel):
     FIELD_VALIDATION_SCHEMA: ClassVar[dict[str, Any]] = {
         name: {"validation": "jsonschema", "schema": schema} for name, schema in FIELD_CRUD_SCHEMA.items()
     }
-    CREATE_REQUIRED: ClassVar[list[str]] = ["finding_source", "finding_source_key"]
+    CREATE_REQUIRED: ClassVar[list[str]] = ["finding_source", "finding_source_key", "scheme"]
 
     finding_source = models.CharField(
         max_length=64,
@@ -86,6 +91,13 @@ class VdrEvaluation(BaseModel):
         default="",
         db_index=True,
         help_text="The `source_key` of the finding evaluated, verbatim. Other half of the identity.",
+    )
+    scheme = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="The algorithm or method that made this evaluation (`max` for VDR-max). Part of the identity.",
     )
     likely_exploitable = models.BooleanField(
         null=True,
