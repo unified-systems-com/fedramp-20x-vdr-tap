@@ -255,7 +255,7 @@ RID: `req-fedramp-20x-vdr-coverage-snapshot`
 
 Status: `Implemented`
 
-The classification mapping (`req-compliance-core-dimension-mapping`) says how much of the inventory carries the data classification it should, and an auditor wants that figure over time, not once. This plugin records it. A second derived collector, `coverage_snapshot`, runs the mapping-summary Search on a schedule and stores the rows as a `compliance_search_snapshot` (`req-compliance-core-search-snapshot`). The plugin owns this because the coverage figure is what its VDR work reports against; the Search it records belongs to the demo project and is seeded there.
+The classification mapping (`req-compliance-core-dimension-mapping`) says how much of the inventory carries the data classification it should, and an auditor wants that figure over time, not once. This plugin records it. A second derived collector, `coverage_snapshot`, runs the coverage Searches on a schedule and stores each one's rows as a `compliance_search_snapshot` (`req-compliance-core-search-snapshot`). The plugin owns this because the coverage figure is what its VDR work reports against; the Search it records belongs to the demo project and is seeded there.
 
 #### Implementation
 
@@ -264,11 +264,11 @@ The classification mapping (`req-compliance-core-dimension-mapping`) says how mu
 | attribute | value |
 | --- | --- |
 | `SOURCE` | `fedramp_20x_vdr` |
-| `SEARCH_ENTITY_IDS` | `("01a15b2f-df3b-7569-bf22-9ead3f816b84",)`: the playground's classification-mapping summary Search (`dimension-mapping-summary`) |
+| `SEARCH_ENTITY_IDS` | `("01a15b2f-df3b-7569-bf22-9ead3f816b84", "01a15fdf-61ef-710d-b5d3-e3a7ae238a40")`: the playground's classification-mapping summary Search and its responsibility-coverage summary Search, both `dimension-mapping-summary` |
 
 It is registered in `apps.py` under scope `fedramp_20x_vdr` and key `coverage_snapshot`, beside `vdr_max`, with a name and description. It reads the grid and calls no outside service, so it needs no credential and no call ceiling.
 
-The Search id is hard-coded in the subclass for the demo (ruled by George 2026-10-20). The id is minted once and is the entity id the playground's seed gives that Search (`req-rampart-20x-playground-snapshot-search`); the two must never differ. If the Search is not on the grid the base class fails the run with an error naming the id and writes nothing, so a deployment without the playground shows a failed run, not a bad snapshot. The plugin depends on the first compliance_core release that ships the base class, and `depends_on` and the dependency floor rise to it.
+The two Search ids are hard-coded in the subclass for the demo (ruled by George 2026-10-20). Each id is minted once and is the entity id the playground's seed gives that Search (`req-rampart-20x-playground-snapshot-search`, `req-rampart-20x-playground-inventory-coverage`); the two must never differ. If a Search is not on the grid the base class fails the run with an error naming the id and writes nothing, so a deployment without the playground shows a failed run, not a bad snapshot. The plugin depends on the first compliance_core release that ships the base class, and `depends_on` and the dependency floor rise to it.
 
 The collector is scheduled by a `Schedule` node with cron `0 * * * *` (hourly, UTC) that targets its `Collector` node; the Schedule is seeded by the playground, not by this plugin, because the cadence is a demo decision (`spec-tap-cares-scheduler.md`).
 
@@ -280,11 +280,11 @@ This is the first collector of the "run a Search on a schedule and keep the resu
 
 | ACID | Title | Status | Description | Notes |
 | --- | --- | :---: | --- | --- |
-| req-fedramp-20x-vdr-coverage-snapshot-1 | Subclass Of The Base | Implemented | `CoverageSnapshotCollector` subclasses `SearchSnapshotCollector`, sets `SOURCE` to `fedramp_20x_vdr` and `SEARCH_ENTITY_IDS` to the one id above, and defines no `run()` of its own. | |
+| req-fedramp-20x-vdr-coverage-snapshot-1 | Subclass Of The Base | Proposed | `CoverageSnapshotCollector` subclasses `SearchSnapshotCollector`, sets `SOURCE` to `fedramp_20x_vdr` and `SEARCH_ENTITY_IDS` to the two ids above, and defines no `run()` of its own. | |
 | req-fedramp-20x-vdr-coverage-snapshot-2 | Registered | Implemented | `coverage_snapshot` is registered under scope `fedramp_20x_vdr` at `ready()`, with a name and a description, and reconciles to one `Collector` node. | |
-| req-fedramp-20x-vdr-coverage-snapshot-3 | One Snapshot Per Run | Implemented | On a grid holding that Search, one run writes one `compliance_search_snapshot` with `source` `fedramp_20x_vdr` and an edge `CAPTURES_SEARCH` to the Search, and a second run writes a second snapshot, not a replacement. | |
+| req-fedramp-20x-vdr-coverage-snapshot-3 | One Snapshot Per Search Per Run | Proposed | On a grid holding both Searches, one run writes one `compliance_search_snapshot` per Search, each with `source` `fedramp_20x_vdr` and an edge `CAPTURES_SEARCH` to its Search, and a second run writes two more, not replacements. | |
 | req-fedramp-20x-vdr-coverage-snapshot-4 | Missing Search Fails Clearly | Implemented | On a grid without the Search the run fails with an error naming the id and writes nothing. | |
-| req-fedramp-20x-vdr-coverage-snapshot-5 | Same Id As The Seed | Implemented | The id in the subclass equals the entity id the playground's seed gives the Search; a test in this plugin pins the id, which shows a change made here. | The pin is one-sided: the playground is a separate repository, so a change to its seed is not seen by this test. Drift there is caught by the hourly run failing with the id named (criterion 4), and the playground's own tests should pin the same literal, which is that repository's requirement to record, not this one's. |
+| req-fedramp-20x-vdr-coverage-snapshot-5 | Same Ids As The Seed | Proposed | Each id in the subclass equals the entity id the playground's seed gives its Search; a test in this plugin pins the id, which shows a change made here. | The pin is one-sided: the playground is a separate repository, so a change to its seed is not seen by this test. Drift there is caught by the hourly run failing with the id named (criterion 4), and the playground's own tests should pin the same literal, which is that repository's requirement to record, not this one's. |
 | req-fedramp-20x-vdr-coverage-snapshot-6 | Dependency Floor | Implemented | `depends_on` for `compliance_core` and the dependency floor name the first release that ships `SearchSnapshotCollector`. | |
 
 ### Finding Reach
