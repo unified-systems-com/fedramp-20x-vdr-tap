@@ -152,7 +152,22 @@ class TestDeadlines:
         assert Entity.objects.count() == before
 
     @pytest.mark.spec("req-fedramp-20x-vdr-deadlines-1")
-    @pytest.mark.parametrize("bad", [{"view": "nope"}, {"bogus": 1}, {"now": "yesterday"}, {"now": 5}])
+    def test_the_most_overdue_comes_first_so_a_cut_drops_the_least_urgent(self) -> None:
+        make("a-late", ago=timedelta(hours=10))
+        make("z-latest", ago=timedelta(hours=40))
+        make("m-mid", ago=timedelta(hours=20))
+        result = due("remediation_due", max_results=2)
+        assert keys(result) == ["z-latest", "m-mid"]
+        assert result["info"]["total_rows"] == 3 and "rows_omitted" in result["warnings"]
+
+    @pytest.mark.spec("req-fedramp-20x-vdr-deadlines-1")
+    @pytest.mark.parametrize(
+        "bad",
+        [
+            {"view": "nope"}, {"bogus": 1}, {"now": "yesterday"}, {"now": 5}, {"max_results": 0}, {"max_results": -1},
+            {"max_results": 5001}, {"max_results": True}, {"fedramp_class": "z"}, {"scheme": ""},
+        ],
+    )  # fmt: skip
     def test_bad_inputs_are_refused(self, bad: dict[str, Any]) -> None:
         with pytest.raises(ValueError):  # noqa: PT011
             clocks.vdr_deadlines(None, bad, db_alias="default")  # type: ignore[arg-type]
@@ -213,6 +228,12 @@ class TestIncidents:
     def test_a_backed_value_without_evaluator_or_time_is_unsupported(self) -> None:
         make("a", likely_exploitable=False, backed=("likely_exploitable",))  # no evaluator, no evaluated_at
         assert keys(incidents("internet_reachable")) == ["a"]
+
+    @pytest.mark.spec("req-fedramp-20x-vdr-incidents-3")
+    @pytest.mark.parametrize("bad", [{"max_results": 0}, {"fedramp_class": "z"}, {"view": "x"}])
+    def test_bad_inputs_are_refused_not_read_as_may(self, bad: dict[str, Any]) -> None:
+        with pytest.raises(ValueError):  # noqa: PT011
+            clocks.vdr_incidents(None, bad, db_alias="default")  # type: ignore[arg-type]
 
     @pytest.mark.spec("req-fedramp-20x-vdr-effective-8")
     def test_only_the_requested_scheme_and_open_findings_are_read(self) -> None:

@@ -15,6 +15,11 @@ evaluation out of a Search. In v0 PAIN cannot be backed, so it always reads as N
 a page never has to show two Searches to get the right answer (`req-fedramp-20x-vdr-incidents-6`).
 
 The class is the input ``fedramp_class`` (default ``d``) and every row says it was assumed.
+
+``max_results`` (1 to 5000, default 1000) bounds the answer and not the work: every open evaluation of the scheme is read and
+computed before the rows are cut, as in `vdr-reach`, and what was left out is reported in ``warnings`` and ``info.total_rows``.
+The deadline views are ordered earliest deadline first, so the cut drops the least urgent rows; ``now`` is the comparison
+instant and exists so a result can be reproduced, so a page should not bind it.
 """
 
 from __future__ import annotations
@@ -75,6 +80,13 @@ def _inputs(schema: dict[str, Any], inputs: dict[str, Any]) -> dict[str, Any]:
     merged.update({k: v for k, v in inputs.items() if v is not None})
     if merged["view"] not in props["view"]["enum"]:
         raise ValueError(f"view must be one of {', '.join(props['view']['enum'])}")
+    if merged["fedramp_class"] not in props["fedramp_class"]["enum"]:
+        raise ValueError(f"fedramp_class must be one of {', '.join(props['fedramp_class']['enum'])}")
+    if not isinstance(merged["scheme"], str) or not merged["scheme"]:
+        raise ValueError("scheme must be a non-empty string")
+    limit = merged["max_results"]
+    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= MAX_RESULTS:
+        raise ValueError(f"max_results must be an integer from 1 to {MAX_RESULTS}")
     return merged
 
 
@@ -207,6 +219,7 @@ def vdr_deadlines(search: Search, inputs: dict[str, Any], *, db_alias: str, laye
                 "overdue": overdue,
             }
         )
+    rows.sort(key=lambda r: (r["due_at"] is None, r["due_at"] or ""))  # earliest deadline first; a stable sort keeps key order
     return _envelope(rows, p["max_results"])
 
 
