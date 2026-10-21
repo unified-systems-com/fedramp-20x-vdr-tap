@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.4](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/compare/v0.1.3...v0.1.4) (2026-10-21)
+
+
+### Features
+
+* **fedramp_20x_vdr:** the coverage snapshot collector records two Searches ([d65d9ba](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/d65d9ba3c0f4133be7c83a59d54c52c5bd5c79eb))
+* **fedramp_20x_vdr:** the coverage snapshot collector records two Searches ([2746144](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/27461441bb7f082c3c5f8f02c2c7294dd10c9774))
+
+
+### Documentation
+
+* **spec:** the coverage snapshot collector records two Searches ([8e89369](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/8e893699579d7cc1bdc0ebfe8817f1a74a08a2ba))
+* **spec:** the coverage snapshot collector records two Searches ([e5cb207](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/e5cb2074d761a438c89c09d557e4326a9c69086e))
+
 ## [0.1.3](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/compare/v0.1.2...v0.1.3) (2026-10-21)
 
 
