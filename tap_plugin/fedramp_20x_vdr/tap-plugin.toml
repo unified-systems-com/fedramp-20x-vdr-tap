@@ -1,5 +1,5 @@
 manifest_version = "0"
-plugin_version = "0.1.4" # x-release-please-version
+plugin_version = "0.1.5" # x-release-please-version
 requires_tap = ">=0.3.0"
 slug = "fedramp_20x_vdr"
 name = "TAP FedRAMP 20x VDR"
@@ -37,4 +37,4 @@ vdr-summary = "tap_plugin.fedramp_20x_vdr.searches.clocks.vdr_summary"
 [[boot.records]]
 name = "ci"
 description = "RESERVED NAME (req-boot-bootstrap-ci-record): the stack this plugin's own tests run in — depends_on closure + self, offline, credential-free. The consumer flips self to editable."
-sha256 = "3428380a6562e3c46a52782014fbafc15707551aae0a4f9bf4bbec3a3b31d454"
+sha256 = "0671bc89c9e3d55fc91a652b17a552238e6b2c84592bcd22a85a18c6978c1671"
