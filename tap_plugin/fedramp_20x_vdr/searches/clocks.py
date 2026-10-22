@@ -55,10 +55,12 @@ _COMMON: dict[str, Any] = {
     "scheme": {"type": "string", "minLength": 1, "default": "max", "description": "Evaluation scheme to read."},
     "max_results": {"type": "integer", "minimum": 1, "maximum": MAX_RESULTS, "default": DEFAULT_MAX_RESULTS},
 }
+_ENTITY: dict[str, Any] = {"type": "string", "minLength": 1, "description": "Only this finding's evaluation."}
 DEADLINES_INPUT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
     "properties": {
+        "entity_id": _ENTITY,
         "view": {"type": "string", "enum": list(DEADLINE_VIEWS), "default": "remediation_due"},
         "now": {"type": "string", "format": "date-time", "description": "The instant to compare with; default is the present."},
         **_COMMON,
@@ -67,7 +69,11 @@ DEADLINES_INPUT_SCHEMA: dict[str, Any] = {
 INCIDENTS_INPUT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
-    "properties": {"view": {"type": "string", "enum": list(INCIDENT_VIEWS), "default": "internet_reachable"}, **_COMMON},
+    "properties": {
+        "view": {"type": "string", "enum": list(INCIDENT_VIEWS), "default": "internet_reachable"},
+        "entity_id": _ENTITY,
+        **_COMMON,
+    },
 }
 
 
@@ -84,6 +90,8 @@ def _inputs(schema: dict[str, Any], inputs: dict[str, Any]) -> dict[str, Any]:
         raise ValueError(f"fedramp_class must be one of {', '.join(props['fedramp_class']['enum'])}")
     if not isinstance(merged["scheme"], str) or not merged["scheme"]:
         raise ValueError("scheme must be a non-empty string")
+    if merged.get("entity_id") is not None and (not isinstance(merged["entity_id"], str) or not merged["entity_id"]):
+        raise ValueError("entity_id must be a non-empty string")
     limit = merged["max_results"]
     if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= MAX_RESULTS:
         raise ValueError(f"max_results must be an integer from 1 to {MAX_RESULTS}")
@@ -102,8 +110,8 @@ def _now(value: Any) -> datetime:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
-def _open_evaluations(scheme: str, *, db_alias: str) -> list[dict[str, Any]]:
-    """Every live evaluation of the scheme whose finding is open, ordered by finding key; each is a plain dict."""
+def _open_evaluations(scheme: str, *, db_alias: str, finding_id: str | None = None) -> list[dict[str, Any]]:
+    """Every live evaluation of the scheme whose finding is open (only `finding_id`'s when given), ordered by finding key."""
     scope = read_scope.DEFAULT_SCOPE
     evaluations = {
         str(row.entity_id): row
@@ -117,7 +125,8 @@ def _open_evaluations(scheme: str, *, db_alias: str) -> list[dict[str, Any]]:
         .filter(edge_type=EVALUATES_EDGE, from_entity_id__in=sorted(evaluations))
         .values_list("from_entity_id", "to_entity_id")
     ):
-        finding_of[str(evaluation)] = str(finding)
+        if finding_id is None or str(finding) == finding_id:
+            finding_of[str(evaluation)] = str(finding)
     findings = {
         str(row.entity_id): row
         for row in read_scope.node_relation(scope, ComplianceFinding, db_alias=db_alias).filter(
@@ -187,7 +196,7 @@ def vdr_deadlines(search: Search, inputs: dict[str, Any], *, db_alias: str, laye
         "evaluated": remediation,
     }
     rows: list[dict[str, Any]] = []
-    for e in _open_evaluations(p["scheme"], db_alias=db_alias):
+    for e in _open_evaluations(p["scheme"], db_alias=db_alias, finding_id=p.get("entity_id")):
         row = _base(e, p)
         detected = e["finding"].first_detected_at
         if view == "detection_unobserved":
@@ -238,7 +247,7 @@ def vdr_incidents(search: Search, inputs: dict[str, Any], *, db_alias: str, laye
     p = _inputs(INCIDENTS_INPUT_SCHEMA, inputs)
     rule = "VER-TFR-IRI" if p["view"] == "internet_reachable" else "VER-TFR-NRI"
     modal = "SHOULD" if p["fedramp_class"] in _SHOULD[rule] else "MAY"
-    evaluations = _open_evaluations(p["scheme"], db_alias=db_alias)
+    evaluations = _open_evaluations(p["scheme"], db_alias=db_alias, finding_id=p.get("entity_id"))
     backed = backed_factors([e["finding_id"] for e in evaluations], scheme=p["scheme"], db_alias=db_alias)
     rows: list[dict[str, Any]] = []
     for e in evaluations:
@@ -264,3 +273,60 @@ def vdr_incidents(search: Search, inputs: dict[str, Any], *, db_alias: str, laye
             }
         )
     return _envelope(rows, p["max_results"])
+
+
+SUMMARY_VIEWS = ("counts", "by_view")
+SUMMARY_INPUT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "view": {"type": "string", "enum": list(SUMMARY_VIEWS), "default": "counts"},
+        "now": DEADLINES_INPUT_SCHEMA["properties"]["now"],
+        "fedramp_class": _COMMON["fedramp_class"],
+        "scheme": _COMMON["scheme"],
+    },
+}
+_SUMMARY_LABELS = (
+    ("evaluations", "Open evaluations"),
+    ("evaluation_overdue", "Evaluation overdue"),
+    ("remediation_overdue", "Remediation overdue (worst-case bound)"),
+    ("acceptance_reached", "Acceptance limit reached"),
+    ("evaluated", "Evaluated (a factor set)"),
+    ("detection_unobserved", "Detection time unobserved"),
+    ("incidents_internet_reachable", "Reportable incidents, internet-reachable"),
+    ("incidents_non_internet_reachable", "Reportable incidents, not internet-reachable"),
+)
+
+
+def vdr_summary(search: Search, inputs: dict[str, Any], *, db_alias: str, layer: str = "full") -> dict[str, Any]:
+    """Counts of the `vdr-deadlines` and `vdr-incidents` Searches for one scheme, for cards and charts.
+
+    `counts`: one row with `evaluations`, `evaluation_overdue`, `remediation_overdue`, `acceptance_reached`, `evaluated`,
+    `detection_unobserved`, `incidents_internet_reachable` and `incidents_non_internet_reachable`. `by_view`: the same
+    numbers as rows (`view`, `label`, `count`). Each count is the row total of the Search of that name, so the summary can
+    never differ from the lists.
+
+    req-fedramp-20x-vdr-summary
+    """
+    unknown = sorted(set(inputs) - set(SUMMARY_INPUT_SCHEMA["properties"]))
+    if unknown:
+        raise ValueError(f"unknown input {', '.join(unknown)}")
+    view = inputs.get("view", "counts")
+    if view not in SUMMARY_VIEWS:
+        raise ValueError(f"view must be one of {', '.join(SUMMARY_VIEWS)}")
+    shared = {k: v for k, v in inputs.items() if k in ("now", "fedramp_class", "scheme") and v is not None}
+    shared["max_results"] = 1
+
+    def total(runner: Any, which: str) -> int:
+        # `now` belongs to the deadline Searches only; the incident Searches need no clock.
+        given = shared if runner is vdr_deadlines else {k: v for k, v in shared.items() if k != "now"}
+        return int(runner(search, {**given, "view": which}, db_alias=db_alias)["info"]["total_rows"])
+
+    scheme = shared.get("scheme", _COMMON["scheme"]["default"])
+    counts = {"evaluations": len(_open_evaluations(scheme, db_alias=db_alias))}
+    for which in ("evaluation_overdue", "remediation_overdue", "acceptance_reached", "evaluated", "detection_unobserved"):
+        counts[which] = total(vdr_deadlines, which)
+    for which in INCIDENT_VIEWS:
+        counts[f"incidents_{which}"] = total(vdr_incidents, which)
+    rows = [counts] if view == "counts" else [{"view": k, "label": label, "count": counts[k]} for k, label in _SUMMARY_LABELS]
+    return {"nodes": [], "edges": [], "rows": rows, "info": {"row_count": len(rows)}, "warnings": {}}

@@ -32,6 +32,7 @@ timeframes = "grift/timeframes.grift.json"
 vdr-reach = "tap_plugin.fedramp_20x_vdr.searches.reach.vdr_reach"
 vdr-deadlines = "tap_plugin.fedramp_20x_vdr.searches.clocks.vdr_deadlines"
 vdr-incidents = "tap_plugin.fedramp_20x_vdr.searches.clocks.vdr_incidents"
+vdr-summary = "tap_plugin.fedramp_20x_vdr.searches.clocks.vdr_summary"
 
 [[boot.records]]
 name = "ci"
