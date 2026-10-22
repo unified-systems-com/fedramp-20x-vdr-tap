@@ -244,6 +244,73 @@ class TestIncidents:
         assert keys(incidents("internet_reachable", scheme="algo2")) == ["other"]
 
 
+class TestOneFinding:
+    @pytest.mark.spec("req-fedramp-20x-vdr-deadlines-7")
+    def test_entity_id_limits_the_deadline_rows_to_one_finding(self) -> None:
+        keep = make("keep", ago=timedelta(hours=3))
+        make("other", ago=timedelta(hours=3))
+        assert keys(due("remediation_due")) == ["keep", "other"]
+        assert keys(due("remediation_due", entity_id=str(keep.pk))) == ["keep"]
+
+    @pytest.mark.spec("req-fedramp-20x-vdr-deadlines-7")
+    def test_entity_id_limits_the_incident_rows_to_one_finding(self) -> None:
+        keep = make("keep")
+        make("other")
+        assert keys(incidents("internet_reachable", entity_id=str(keep.pk))) == ["keep"]
+
+    @pytest.mark.spec("req-fedramp-20x-vdr-deadlines-7")
+    @pytest.mark.parametrize("bad", ["", 5])
+    def test_a_bad_entity_id_is_refused(self, bad: Any) -> None:
+        with pytest.raises(ValueError, match="entity_id"):
+            clocks.vdr_deadlines(None, {"entity_id": bad}, db_alias="default")  # type: ignore[arg-type]
+
+
+class TestSummary:
+    def counts(self, **inputs: Any) -> dict[str, Any]:
+        return clocks.vdr_summary(None, {"now": NOW.isoformat(), **inputs}, db_alias="default")["rows"][0]  # type: ignore[arg-type]
+
+    @pytest.mark.spec("req-fedramp-20x-vdr-summary-1")
+    def test_counts_match_the_lists_they_summarise(self) -> None:
+        make("late", ago=timedelta(hours=60))
+        make("young", ago=timedelta(hours=2))
+        make("nodate", ago=None)
+        make("set", ago=timedelta(hours=13), likely_exploitable=False, **WHO)
+        c = self.counts()
+        assert c["evaluations"] == 4
+        for view in ("evaluation_overdue", "remediation_overdue", "acceptance_reached", "evaluated", "detection_unobserved"):
+            assert c[view] == len(due(view)["rows"]), view
+        for view in clocks.INCIDENT_VIEWS:
+            assert c[f"incidents_{view}"] == len(incidents(view)["rows"]), view
+        assert (c["detection_unobserved"], c["evaluated"]) == (1, 1)
+
+    @pytest.mark.spec("req-fedramp-20x-vdr-summary-2")
+    def test_by_view_lists_every_count_as_a_row(self) -> None:
+        make("a", ago=timedelta(hours=60))
+        rows = clocks.vdr_summary(None, {"view": "by_view", "now": NOW.isoformat()}, db_alias="default")["rows"]  # type: ignore[arg-type]
+        assert [r["view"] for r in rows][:2] == ["evaluations", "evaluation_overdue"] and len(rows) == 8
+        assert all(isinstance(r["count"], int) and r["label"] for r in rows)
+
+    @pytest.mark.spec("req-fedramp-20x-vdr-summary-3")
+    def test_an_empty_grid_is_zeros_not_missing(self) -> None:
+        assert set(self.counts().values()) == {0}
+
+    @pytest.mark.spec("req-fedramp-20x-vdr-summary-4")
+    @pytest.mark.parametrize("bad", [{"view": "x"}, {"bogus": 1}, {"fedramp_class": "z"}])
+    def test_bad_input_is_refused(self, bad: dict[str, Any]) -> None:
+        with pytest.raises(ValueError):  # noqa: PT011
+            clocks.vdr_summary(None, bad, db_alias="default")  # type: ignore[arg-type]
+
+    @pytest.mark.spec("req-fedramp-20x-vdr-summary-5")
+    def test_it_is_registered_and_writes_nothing(self) -> None:
+        from tap_grid.registry import get_search_runner
+
+        assert get_search_runner("tap_plugin.fedramp_20x_vdr.searches.clocks:vdr-summary") is clocks.vdr_summary
+        make("a")
+        before = Entity.objects.count()
+        self.counts()
+        assert Entity.objects.count() == before
+
+
 class TestSurface:
     @pytest.mark.spec("req-fedramp-20x-vdr-deadlines-5")
     def test_the_runners_are_registered_and_run_through_the_search_service(self) -> None:
@@ -265,3 +332,19 @@ class TestSurface:
     def test_neither_runner_filters_on_the_scheme_dimension(self) -> None:
         text = Path(clocks.__file__).read_text(encoding="utf-8")
         assert "vdr.scheme" not in text.replace("`vdr.scheme`", "")
+
+
+class TestSummaryReadsOnce:
+    @pytest.mark.spec("req-fedramp-20x-vdr-summary-1")
+    def test_the_open_evaluations_are_read_once_for_all_the_counts(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        make("a", ago=timedelta(hours=60))
+        calls = {"n": 0}
+        real = clocks._open_evaluations
+
+        def counting(*args: Any, **kwargs: Any) -> Any:
+            calls["n"] += 1
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(clocks, "_open_evaluations", counting)
+        clocks.vdr_summary(None, {"now": NOW.isoformat()}, db_alias="default")  # type: ignore[arg-type]
+        assert calls["n"] == 1

@@ -55,6 +55,7 @@ FedRAMP's rules ask a provider to evaluate each detected vulnerability and then 
 | req-fedramp-20x-vdr-pain | [PAIN Levels And Deadlines](#pain-levels-and-deadlines) | Implemented | The ordered levels N1 to N5, the exposure column and `deadline_hours` from the timeframe rows, for any method plugin that supplies a level. |
 | req-fedramp-20x-vdr-deadlines | [Deadlines](#deadlines) | Implemented | Evaluation deadline, remediation deadline, overdue and acceptance flags as Searches. Needs `first_detected_at` (Issue# 43 - compliance-core-tap, v0.8.4); the runner does the date arithmetic. |
 | req-fedramp-20x-vdr-incidents | [Reportable Incidents](#reportable-incidents) | Implemented | The internet-reachable and non-internet-reachable incident rules as Searches. Ship condition: each is one Search that applies the evidence test itself (`-incidents-6`). |
+| req-fedramp-20x-vdr-summary | [Summary Counts](#summary-counts) | Implemented | The `vdr-summary` `module` Search runner: the counts of the deadline and incident Searches for one scheme, for cards and charts. |
 | req-fedramp-20x-vdr-nongoals | [v0 Non-Goals](#v0-non-goals) | Proposed | What v0 does not build. |
 | req-fedramp-20x-vdr-report | [VDR Report](#v0-non-goals) | Backlog | The per-period report node and the published JSON schemas (VER-RPT-VDT, VER-RPT-PER, VER-TFR-MRH). |
 | req-fedramp-20x-vdr-grouping | [Grouping](#v0-non-goals) | Backlog | Logical groupings of affected resources (VER-EVA-GRV). |
@@ -399,6 +400,7 @@ Every Search above uses the v0 bound defined in the paragraph before this table,
 | req-fedramp-20x-vdr-deadlines-3 | Unobserved Detection Is Listed | Implemented | A finding with null `first_detected_at` appears in the "detection time unobserved" Search and in no overdue Search. | |
 | req-fedramp-20x-vdr-deadlines-4 | Bound Stated, Anchor Is Detection | Implemented | Each remediation and acceptance Search counts from `first_detected_at` for every finding, evaluated or not, applies the worst-case row, and its description says it is a bound. | Anchoring an evaluated finding on `evaluated_at` with the worst-case row is non-conformant. |
 | req-fedramp-20x-vdr-deadlines-6 | A Timestamp Does Not Complete An Evaluation | Implemented | An evaluation with `evaluated_at` set but a factor null, unsupported or (in v0) `pain` unset still appears in the evaluation-overdue Search once past its evaluation deadline. | Closes the timestamp-only bypass found in review. |
+| req-fedramp-20x-vdr-deadlines-7 | One Finding | Implemented | The optional input `entity_id` limits `vdr-deadlines` and `vdr-incidents` to the evaluation of that finding. | Lets a page follow one finding. |
 | req-fedramp-20x-vdr-deadlines-5 | Dependencies Landed | Implemented | `first_detected_at` exists on `compliance_finding` and the runner does the date arithmetic, so the Searches ship. | Issue# 43 - compliance-core-tap (v0.8.4). The runner is registered as `tap_plugin.fedramp_20x_vdr.searches.clocks:vdr-deadlines`. |
 
 ### Reportable Incidents
@@ -425,6 +427,28 @@ Two Searches, the `view` values `internet_reachable` and `non_internet_reachable
 | req-fedramp-20x-vdr-incidents-4 | Partly Evaluated Is Computed | Implemented | An evaluation with an evidence-backed factor is placed by its effective values: `likely_exploitable` of false removes it from both Searches; `internet_reachable` of false moves a likely exploitable N5 from the first Search into the second. | PAIN transitions wait for a PAIN basis list. |
 | req-fedramp-20x-vdr-incidents-5 | Unsupported Factor Reads As Null | Implemented | An evaluation with `likely_exploitable` of false, or `internet_reachable` of false, and no evidence edge for that factor still appears in the first Search. A `pain` value always reads as N5 in v0. | Verified by a test that writes the value without the edge. |
 | req-fedramp-20x-vdr-incidents-6 | One Search Applies The Test | Implemented | Each incident Search is a single Search that applies the evidence test itself, through `backed_factors`; no page has to show two Searches to get the right answer. | Whether Gryphon can express the test in one query was not established; the runner is the single Search instead (decided 2026-10-21 so the Searches are ready for the demo). A pair of Searches that depends on a page showing both is not conformant. |
+
+### Summary Counts
+----
+RID: `req-fedramp-20x-vdr-summary`
+
+Status: `Implemented`
+
+A card or a chart needs counts and the deadline Searches return lists. `vdr-summary` (`searches/clocks.py`) counts them with the same code, so a count can never differ from the list it summarises. It stores nothing.
+
+#### Implementation
+
+Inputs: `view` (`counts`, the default, or `by_view`), `now`, `fedramp_class` (default `d`) and `scheme` (default `max`). `counts` returns one row: `evaluations` (the open evaluations of the scheme), `evaluation_overdue`, `remediation_overdue`, `acceptance_reached`, `evaluated`, `detection_unobserved`, `incidents_internet_reachable` and `incidents_non_internet_reachable`. `by_view` returns the same numbers as eight rows of `view`, `label` and `count`. Each count is the row total of the Search of that name.
+
+#### Acceptance Criteria
+
+| ACID | Title | Status | Description | Notes |
+| --- | --- | :---: | --- | --- |
+| req-fedramp-20x-vdr-summary-1 | Counts Match The Lists | Implemented | Each count equals the number of rows the Search of that name returns for the same inputs. | |
+| req-fedramp-20x-vdr-summary-2 | By View | Implemented | `by_view` returns the eight numbers as rows with `view`, `label` and an integer `count`. | |
+| req-fedramp-20x-vdr-summary-3 | Zero Is Stated | Implemented | On a grid with no evaluations every count is 0, not missing. | |
+| req-fedramp-20x-vdr-summary-4 | Bad Input Refused | Implemented | An unknown input, a `view` other than the two and a class other than a to d are refused with a `ValueError`. | |
+| req-fedramp-20x-vdr-summary-5 | Registered, Read Only | Implemented | The runner is registered as `tap_plugin.fedramp_20x_vdr.searches.clocks:vdr-summary` and writes nothing. | |
 
 ### v0 Non-Goals
 ----
