@@ -174,7 +174,14 @@ def _envelope(everything: list[dict[str, Any]], limit: int) -> dict[str, Any]:
     }
 
 
-def vdr_deadlines(search: Search, inputs: dict[str, Any], *, db_alias: str, layer: str = "full") -> dict[str, Any]:
+def vdr_deadlines(
+    search: Search,
+    inputs: dict[str, Any],
+    *,
+    db_alias: str,
+    layer: str = "full",
+    _evaluations: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """One row per open evaluation in the view, each with the v0 bound: `hours`, `due_at`, `remaining_hours`, `overdue`.
 
     Every row says `bound: true` and `anchor: first_detected_at`; `complete` is false in v0 because PAIN cannot be set, so
@@ -196,7 +203,7 @@ def vdr_deadlines(search: Search, inputs: dict[str, Any], *, db_alias: str, laye
         "evaluated": remediation,
     }
     rows: list[dict[str, Any]] = []
-    for e in _open_evaluations(p["scheme"], db_alias=db_alias, finding_id=p.get("entity_id")):
+    for e in (_evaluations if _evaluations is not None else _open_evaluations(p["scheme"], db_alias=db_alias, finding_id=p.get("entity_id"))):
         row = _base(e, p)
         detected = e["finding"].first_detected_at
         if view == "detection_unobserved":
@@ -236,7 +243,14 @@ def vdr_deadlines(search: Search, inputs: dict[str, Any], *, db_alias: str, laye
 _SHOULD = {"VER-TFR-IRI": {"c", "d"}, "VER-TFR-NRI": {"d"}}
 
 
-def vdr_incidents(search: Search, inputs: dict[str, Any], *, db_alias: str, layer: str = "full") -> dict[str, Any]:
+def vdr_incidents(
+    search: Search,
+    inputs: dict[str, Any],
+    *,
+    db_alias: str,
+    layer: str = "full",
+    _evaluations: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """One row per open evaluation that is a reportable incident under the rule of the view.
 
     Row: the evaluation and finding, `rule`, `modal` (`SHOULD` or `MAY` for the class), the effective `likely_exploitable`,
@@ -247,7 +261,9 @@ def vdr_incidents(search: Search, inputs: dict[str, Any], *, db_alias: str, laye
     p = _inputs(INCIDENTS_INPUT_SCHEMA, inputs)
     rule = "VER-TFR-IRI" if p["view"] == "internet_reachable" else "VER-TFR-NRI"
     modal = "SHOULD" if p["fedramp_class"] in _SHOULD[rule] else "MAY"
-    evaluations = _open_evaluations(p["scheme"], db_alias=db_alias, finding_id=p.get("entity_id"))
+    evaluations = (
+        _evaluations if _evaluations is not None else _open_evaluations(p["scheme"], db_alias=db_alias, finding_id=p.get("entity_id"))
+    )
     backed = backed_factors([e["finding_id"] for e in evaluations], scheme=p["scheme"], db_alias=db_alias)
     rows: list[dict[str, Any]] = []
     for e in evaluations:
@@ -304,7 +320,7 @@ def vdr_summary(search: Search, inputs: dict[str, Any], *, db_alias: str, layer:
     `counts`: one row with `evaluations`, `evaluation_overdue`, `remediation_overdue`, `acceptance_reached`, `evaluated`,
     `detection_unobserved`, `incidents_internet_reachable` and `incidents_non_internet_reachable`. `by_view`: the same
     numbers as rows (`view`, `label`, `count`). Each count is the row total of the Search of that name, so the summary can
-    never differ from the lists.
+    never differ from the lists; the open evaluations are read once for all of them.
 
     req-fedramp-20x-vdr-summary
     """
@@ -320,10 +336,11 @@ def vdr_summary(search: Search, inputs: dict[str, Any], *, db_alias: str, layer:
     def total(runner: Any, which: str) -> int:
         # `now` belongs to the deadline Searches only; the incident Searches need no clock.
         given = shared if runner is vdr_deadlines else {k: v for k, v in shared.items() if k != "now"}
-        return int(runner(search, {**given, "view": which}, db_alias=db_alias)["info"]["total_rows"])
+        return int(runner(search, {**given, "view": which}, db_alias=db_alias, _evaluations=loaded)["info"]["total_rows"])
 
     scheme = shared.get("scheme", _COMMON["scheme"]["default"])
-    counts = {"evaluations": len(_open_evaluations(scheme, db_alias=db_alias))}
+    loaded = _open_evaluations(scheme, db_alias=db_alias)  # read once and shared by every count below
+    counts = {"evaluations": len(loaded)}
     for which in ("evaluation_overdue", "remediation_overdue", "acceptance_reached", "evaluated", "detection_unobserved"):
         counts[which] = total(vdr_deadlines, which)
     for which in INCIDENT_VIEWS:

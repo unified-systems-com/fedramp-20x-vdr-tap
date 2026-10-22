@@ -332,3 +332,19 @@ class TestSurface:
     def test_neither_runner_filters_on_the_scheme_dimension(self) -> None:
         text = Path(clocks.__file__).read_text(encoding="utf-8")
         assert "vdr.scheme" not in text.replace("`vdr.scheme`", "")
+
+
+class TestSummaryReadsOnce:
+    @pytest.mark.spec("req-fedramp-20x-vdr-summary-1")
+    def test_the_open_evaluations_are_read_once_for_all_the_counts(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        make("a", ago=timedelta(hours=60))
+        calls = {"n": 0}
+        real = clocks._open_evaluations
+
+        def counting(*args: Any, **kwargs: Any) -> Any:
+            calls["n"] += 1
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(clocks, "_open_evaluations", counting)
+        clocks.vdr_summary(None, {"now": NOW.isoformat()}, db_alias="default")  # type: ignore[arg-type]
+        assert calls["n"] == 1
