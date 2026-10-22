@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.5](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/compare/v0.1.4...v0.1.5) (2026-10-22)
+
+
+### Features
+
+* **fedramp_20x_vdr:** vdr-summary counts and a one-finding filter ([a6ad153](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/a6ad153a12e934c1f9c51a767b7dd6a5497815b0))
+* **fedramp_20x_vdr:** vdr-summary counts and a one-finding filter ([0290a89](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/0290a8912f3d9d72e93691430e407e191cfe7446))
+
+
+### Bug Fixes
+
+* **fedramp_20x_vdr:** vdr-summary reads the open evaluations once ([9db11bf](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/9db11bf63dbf2044de8dbcb6678329eb1dd71694))
+
 ## [0.1.4](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/compare/v0.1.3...v0.1.4) (2026-10-21)
 
 
