@@ -168,13 +168,18 @@ class TestIdentity:
             assert grift_import(_doc([_ref_node("n", EVALUATION, fields, name=f"VDR {key}")])).success
         assert get_model_class(EVALUATION).objects.live().count() == 2
 
-    def test_an_identity_only_write_blanks_what_a_person_set(self) -> None:
-        """Pins the platform behaviour the collector is built around (observed 2026-10-19): a GRIFT
-        node under an existing key REPLACES the row, so every field the node omits goes back to null.
-        That is why the collector never sends a node for a key that already has an evaluation, and why
-        its read-then-write window, though short, is a real hazard (a person's evaluation written inside
-        it would be blanked; the old values stay in the node's history). If the platform ever merges
-        instead of replacing, this test fails and the guard can be relaxed."""
+    def test_an_identity_only_write_on_an_existing_row(self) -> None:
+        """What an identity-only GRIFT node does to an evaluation a person already filled in.
+
+        On a core without keep-absent upserts (before unified-systems-com/tap#1128), a GRIFT node under an
+        existing key REPLACES the row, so every field it omits goes back to null: that is why the collector
+        never sends a node for a key that already has an evaluation, and why its read-then-write window is a
+        real hazard. On a core with them, an omitted field is left alone and the same write keeps what the
+        person set. The test follows the core it runs against and fails the day the two disagree, so the
+        branch can be deleted when ``requires_tap`` moves past the release that carries tap#1128."""
+        from tap_grid.service_types import WriteOperation
+
+        keeps_omitted_fields = "absent" in WriteOperation.__dataclass_fields__
         name = f"VDR {FINDING_PAYLOAD['source_key']}"
         populated = {
             **EVALUATION_PAYLOAD,
@@ -185,7 +190,12 @@ class TestIdentity:
         assert grift_import(_doc([_ref_node("n", EVALUATION, populated, name=name)])).success
         assert grift_import(_doc([_ref_node("n", EVALUATION, EVALUATION_PAYLOAD, name=name)])).success
         row = get_model_class(EVALUATION).objects.live().get()
-        assert row.likely_exploitable is None and row.evaluator is None and row.rationale is None
+        if keeps_omitted_fields:
+            assert row.likely_exploitable is False
+            assert row.evaluator == "a.reviewer"
+            assert row.rationale == "Only reachable through the proxy."
+        else:
+            assert row.likely_exploitable is None and row.evaluator is None and row.rationale is None
 
 
 @pytest.mark.django_db
