@@ -1,6 +1,6 @@
 manifest_version = "0"
 plugin_version = "0.1.5" # x-release-please-version
-requires_tap = ">=0.3.0"
+requires_tap = ">=0.3.1"
 slug = "fedramp_20x_vdr"
 name = "TAP FedRAMP 20x VDR"
 description = "Per-finding FedRAMP 20x Vulnerability Detection and Response evaluation (LEV, IRV, PAIN), the remediation timeframe tables as data, and the deadlines they imply."
