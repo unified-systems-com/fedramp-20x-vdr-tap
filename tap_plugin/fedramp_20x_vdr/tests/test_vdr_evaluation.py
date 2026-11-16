@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 import tap_plugin.compliance_core.models as compliance  # noqa: F401 - trigger model registration
 import tap_plugin.fedramp_20x_vdr.models as vdr  # noqa: F401 - trigger model registration
+from tap_plugin.fedramp_20x_vdr.tests.conftest import dimension_view
 
 from tap_grid.constraints import InvalidEdgeError
 from tap_grid.grift import grift_import
@@ -100,7 +101,7 @@ class TestNodes:
         node = _create(EVALUATION, EVALUATION_PAYLOAD)
         node.entity.refresh_from_db()
         assert node.entity.name == f"VDR {FINDING_PAYLOAD['source_key']}"
-        assert node.entity.dimensions.get("fedramp.rule") == "vdr"
+        assert dimension_view(node.entity).get("fedramp.rule") == "vdr"
 
     @pytest.mark.parametrize("missing", ["finding_source", "finding_source_key", "scheme"])
     def test_the_finding_identity_is_required(self, missing: str) -> None:
@@ -213,7 +214,7 @@ class TestEdges:
     def test_an_evaluation_evaluates_a_finding_and_takes_the_dimension(self) -> None:
         n = self._nodes()
         edge = create_edge(n["evaluation"].entity, n["finding"].entity, EVALUATES)
-        assert edge.entity.dimensions.get("fedramp.rule") == "vdr"
+        assert dimension_view(edge.entity).get("fedramp.rule") == "vdr"
 
     # The grid permits an edge when EITHER endpoint's declaration or the edge type's sources and
     # targets allow it, and an endpoint that declares nothing (compliance_core's finding, evidence
@@ -262,7 +263,7 @@ class TestEdges:
             properties={"factor": "internet_reachable", "basis": "protected_at_perimeter", "note": "WAF"},
         )
         assert edge.properties["factor"] == "internet_reachable"
-        assert edge.entity.dimensions.get("fedramp.rule") == "vdr"
+        assert dimension_view(edge.entity).get("fedramp.rule") == "vdr"
 
     @pytest.mark.parametrize(
         "bad",

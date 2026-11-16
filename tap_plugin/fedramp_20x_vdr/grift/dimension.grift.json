@@ -1,0 +1,52 @@
+{
+  "metadata": {
+    "grift_version": "0"
+  },
+  "_reserved": {},
+  "batches": [
+    {
+      "batch_entity": {
+        "entity_id": "01a1e567-47ab-770c-af71-4d3381f50bf5",
+        "entity_type": "batch",
+        "name": "FedRAMP 20x VDR dimensions v0.1.0",
+        "dimensions": {}
+      },
+      "batch_node": {
+        "source": "plugins.fedramp_20x_vdr",
+        "name": "FedRAMP 20x VDR dimensions v0.1.0",
+        "description": "Dimension nodes for every dimension key the fedramp_20x_vdr plugin writes, so each key has a declared node now that the dimension map is keyed by node id (tap#708, tap#711)."
+      },
+      "nodes": [
+        {
+          "entity": {
+            "entity_id": "01a1e567-47ab-770c-af71-4d34917ac063",
+            "entity_type": "dimension",
+            "name": "fedramp.rule",
+            "dimensions": {
+              "tap.meta": "dimension"
+            }
+          },
+          "node": {
+            "name": "fedramp.rule",
+            "description": "The FedRAMP rule family an object belongs to, so a filter can scope to one family without naming a type. This plugin writes the value vdr on every type and edge it owns; another rule family from the same regime takes its own value."
+          }
+        },
+        {
+          "entity": {
+            "entity_id": "01a1e567-47ab-770c-af71-4d359b4a951e",
+            "entity_type": "dimension",
+            "name": "vdr.scheme",
+            "dimensions": {
+              "tap.meta": "dimension"
+            }
+          },
+          "node": {
+            "name": "vdr.scheme",
+            "description": "The algorithm or method that made a VDR evaluation: max for the VDR-max collector, another name for another method. Stamped on every vdr_evaluation and its EVALUATES_COMPLIANCE_FINDING edge as a copy of the node's scheme column, for display and filtering."
+          }
+        }
+      ],
+      "edges": []
+    }
+  ]
+}

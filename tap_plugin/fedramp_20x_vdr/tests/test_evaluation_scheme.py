@@ -15,6 +15,7 @@ import pytest
 import tap_plugin.compliance_core.models as compliance  # noqa: F401 - trigger model registration
 import tap_plugin.fedramp_20x_vdr.models as vdr  # noqa: F401 - trigger model registration
 from tap_plugin.fedramp_20x_vdr.collectors.vdr_max.collector import VdrMaxCollector
+from tap_plugin.fedramp_20x_vdr.tests.conftest import dimension_view
 
 from tap.pytest_harness import isolated_registry
 from tap_cares.models import CollectionJobStatus, Collector
@@ -152,9 +153,9 @@ class TestCollector:
         _run()
         (evaluation,) = _all()
         assert evaluation.scheme == "max"
-        assert _entity(evaluation.entity_id).dimensions == {"fedramp.rule": "vdr", "vdr.scheme": "max"}
+        assert dimension_view(_entity(evaluation.entity_id)) == {"fedramp.rule": "vdr", "vdr.scheme": "max"}
         edge = Edge.objects.get(edge_type=EVALUATES, from_entity_id=evaluation.entity_id)
-        assert _entity(edge.entity_id).dimensions == {"fedramp.rule": "vdr", "vdr.scheme": "max"}
+        assert dimension_view(_entity(edge.entity_id)) == {"fedramp.rule": "vdr", "vdr.scheme": "max"}
 
     @pytest.mark.spec("req-fedramp-20x-vdr-collector-9")
     def test_another_schemes_evaluation_is_not_a_max_one_and_the_finding_still_gets_max(
@@ -268,9 +269,10 @@ class TestUpgradeFromV01:
             old_apps = MigrationExecutor(connection).loader.project_state([(app, "0001_initial")]).apps
             Historic = old_apps.get_model(app, "VdrEvaluation")
             assert "scheme" not in {f.name for f in Historic._meta.get_fields()}
-            entity = Entity.objects.create(
-                entity_type=EVALUATION, name="VDR old", dimensions={"fedramp.rule": "vdr"}
-            )
+            # A row written before core keyed the map by Dimension node: the name-keyed map is set with a
+            # queryset update, because a later core refuses it on save and an old row never went through that save.
+            entity = Entity.objects.create(entity_type=EVALUATION, name="VDR old")
+            Entity.objects.filter(pk=entity.pk).update(dimensions={"fedramp.rule": "vdr"})
             Historic.objects.create(
                 entity_id=entity.pk,
                 finding_source="github_core",
