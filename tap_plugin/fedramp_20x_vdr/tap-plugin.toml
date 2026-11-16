@@ -25,6 +25,7 @@ EVALUATES_COMPLIANCE_FINDING__fedramp_20x_vdr = "edges/EVALUATES_COMPLIANCE_FIND
 CITES_FACTOR_EVIDENCE__fedramp_20x_vdr = "edges/CITES_FACTOR_EVIDENCE__fedramp_20x_vdr.edge.json"
 
 [grift]
+dimension = "grift/dimension.grift.json"
 timeframes = "grift/timeframes.grift.json"
 
 # Module Search runners (req-fedramp-20x-vdr-reach). Registered under the runner's module scope.

@@ -16,6 +16,7 @@ from typing import Any
 import jsonschema
 import pytest
 import tap_plugin.fedramp_20x_vdr.models as vdr  # noqa: F401 - trigger model registration
+from tap_plugin.fedramp_20x_vdr.tests.conftest import dimension_view
 
 from tap_grid.grift import grift_import
 from tap_grid.registry import get_model_class
@@ -133,7 +134,7 @@ class TestSeedImport:
         row.entity.refresh_from_db()
         assert row.hours == 12
         assert row.entity.name == "VDR-TFR-PVR d N5 lev_irv"
-        assert row.entity.dimensions.get("fedramp.rule") == "vdr"
+        assert dimension_view(row.entity).get("fedramp.rule") == "vdr"
 
 
 class TestEvidenceBasisList:
