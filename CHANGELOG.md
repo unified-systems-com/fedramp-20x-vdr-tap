@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.6](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/compare/v0.1.5...v0.1.6) (2026-11-16)
+
+
+### Features
+
+* declare Dimension nodes for fedramp.rule and vdr.scheme ([b4b7364](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/b4b7364e1e69a625e6e6f37e5d54c93e5b4306ca))
+* declare Dimension nodes for fedramp.rule and vdr.scheme ([6dd0417](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/6dd0417141edad1dd9abd63b9cc303e65561e2ba))
+
+
+### Bug Fixes
+
+* **ci-record:** pin compliance_core v0.8.12 and computing_core v0.10.8 ([cdd3354](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/cdd33540bb155aeb521386b85ecc7b66d11f6ef2))
+* **ci-record:** pin compliance_core v0.8.12 and computing_core v0.10.8, the releases that carry their Dimension seeds ([a70a2c1](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/a70a2c11de3796fd4e8552ae7cb8a464929f2d80))
+
 ## [0.1.5](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/compare/v0.1.4...v0.1.5) (2026-10-22)
 
 
