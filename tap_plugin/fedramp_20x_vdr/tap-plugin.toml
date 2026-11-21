@@ -1,6 +1,6 @@
 manifest_version = "0"
 plugin_version = "0.1.6" # x-release-please-version
-requires_tap = ">=0.3.1"
+requires_tap = ">=0.4.3"
 slug = "fedramp_20x_vdr"
 name = "TAP FedRAMP 20x VDR"
 description = "Per-finding FedRAMP 20x Vulnerability Detection and Response evaluation (LEV, IRV, PAIN), the remediation timeframe tables as data, and the deadlines they imply."
@@ -38,4 +38,4 @@ vdr-summary = "tap_plugin.fedramp_20x_vdr.searches.clocks.vdr_summary"
 [[boot.records]]
 name = "ci"
 description = "RESERVED NAME (req-boot-bootstrap-ci-record): the stack this plugin's own tests run in — depends_on closure + self, offline, credential-free. The consumer flips self to editable."
-sha256 = "7336327d59754841fd2214bcd77a1e8b68fd777a01bf9dd722654e26472a4763"
+sha256 = "30ab3fa1a7c42aec7efea548d9851a7283f029b680ee8b11a2378af3dcfc240e"
