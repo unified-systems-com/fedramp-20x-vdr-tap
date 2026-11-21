@@ -26,6 +26,6 @@ jobs:
       contents: read
       security-events: write
     # Pinned to a tap main commit (the same one the release-sbom caller uses).
-    uses: unified-systems-com/tap/.github/workflows/plugin-ci.yml@c23982a299b16850d14a3b2823a57375d59962f3
+    uses: unified-systems-com/tap/.github/workflows/plugin-ci.yml@868aa2afc9c8e609ae3f457806be20d8b878b896
     with:
       plugin_slug: fedramp_20x_vdr
