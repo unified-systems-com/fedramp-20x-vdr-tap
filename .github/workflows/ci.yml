@@ -25,7 +25,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
-    # Pinned to a tap main commit (the same one the release-sbom caller uses).
-    uses: unified-systems-com/tap/.github/workflows/plugin-ci.yml@c23982a299b16850d14a3b2823a57375d59962f3
+    # Pinned to core tag v0.4.7 (the same commit the release-sbom and nightly callers use).
+    uses: unified-systems-com/tap/.github/workflows/plugin-ci.yml@2338a593f89afde5db271d2fad4572539babef1f
     with:
       plugin_slug: fedramp_20x_vdr

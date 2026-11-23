@@ -4,6 +4,7 @@ from typing import Any, ClassVar
 
 from django.db import models
 
+from tap_grid.event_time import NO_EVENT_TIME, NoEventTime
 from tap_grid.models import BaseModel
 
 _RULES = ["VDR-TFR-PVR", "VER-TFR-EVU", "VER-TFR-MAV"]
@@ -32,6 +33,9 @@ class VdrTimeframe(BaseModel):
     # The cell's coordinates. `pain` and `exposure` are "" (observed-empty) on rules without
     # them, which the generated search matches like any other value.
     NATURAL_KEY: ClassVar[tuple[str, ...]] = ("rule", "fedramp_class", "pain", "exposure")
+    # A table cell states a rule, not something that happened; canon_read_at is when we read the
+    # page (a collection time, never declared) and the page states no publication date per cell.
+    EVENT_TIME: ClassVar[NoEventTime] = NO_EVENT_TIME
     ENTITY_NAME: ClassVar[str] = "VDR Timeframe"
     ENTITY_DESCRIPTION: ClassVar[str] = (
         "One cell of a FedRAMP Vulnerability Detection and Response timeframe table, in whole hours, "
