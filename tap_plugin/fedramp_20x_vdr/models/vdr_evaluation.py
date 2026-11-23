@@ -4,6 +4,7 @@ from typing import Any, ClassVar
 
 from django.db import models
 
+from tap_grid.event_time import Moment
 from tap_grid.models import BaseModel
 
 _NULLABLE_STRING: dict[str, Any] = {"type": ["string", "null"]}
@@ -39,6 +40,9 @@ class VdrEvaluation(BaseModel):
     # (req-fedramp-20x-vdr-evaluation-4); an edge cannot be validated against a node's fields
     # when the node is written.
     NATURAL_KEY: ClassVar[tuple[str, ...]] = ("finding_source", "finding_source_key", "scheme")
+    # An evaluation is a judgement made once, at the time the evaluator states (spec: "When the
+    # evaluation was made"); a zoned DateTimeField, null until someone evaluates.
+    EVENT_TIME: ClassVar[Moment] = Moment("evaluated_at", "occurred")
     ENTITY_NAME: ClassVar[str] = "VDR Evaluation"
     ENTITY_DESCRIPTION: ClassVar[str] = (
         "One finding's FedRAMP Vulnerability Detection and Response evaluation: likely exploitable, "
