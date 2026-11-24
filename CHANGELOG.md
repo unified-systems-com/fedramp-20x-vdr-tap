@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.7](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/compare/v0.1.6...v0.1.7) (2026-11-24)
+
+
+### Features
+
+* declare event time for every model (tap v0.4.7) ([8ff24dc](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/8ff24dc873ddf8a38fafab2ea9883b7fc24f3e33))
+* declare event time for every model (tap v0.4.7) ([36581f4](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/36581f4f404ddf5bdf9d9b443f8e9cf3281f1cb6))
+
 ## [0.1.6](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/compare/v0.1.5...v0.1.6) (2026-11-16)
 
 
