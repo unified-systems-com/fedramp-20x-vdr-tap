@@ -28,8 +28,8 @@ C = "computing_core__"
 pytestmark = pytest.mark.django_db(transaction=True, databases=["default", "search_readonly"])
 
 
-def _node(type_slug: str, payload: dict[str, Any]) -> Entity:
-    made = create_node(type_slug, payload)
+def _node(type_slug: str, payload: dict[str, Any], dimensions: dict[str, str] | None = None) -> Entity:
+    made = create_node(type_slug, payload, dimensions=dimensions)
     assert made.success, made.errors
     return Entity.objects.get(pk=made.entity_id)
 
@@ -52,10 +52,18 @@ class World:
         return _node(C + "program", {"program_name": name})
 
     def image_host(self, name: str) -> Entity:
-        return _node(C + "host", {"realm": "assert", "stable_id": f"image-{name}", "kind": "container"})
+        return _node(
+            C + "host",
+            {"stable_id": f"image-{name}", "kind": "container"},
+            dimensions={"tap.computing.host_type": "assert"},
+        )
 
     def container(self, name: str, host: Entity) -> Entity:
-        container = _node(C + "host", {"realm": "assert", "stable_id": f"container-{name}", "kind": "container"})
+        container = _node(
+            C + "host",
+            {"stable_id": f"container-{name}", "kind": "container"},
+            dimensions={"tap.computing.host_type": "assert"},
+        )
         _edge(container, "RUNS_IMAGE", host)
         return container
 
