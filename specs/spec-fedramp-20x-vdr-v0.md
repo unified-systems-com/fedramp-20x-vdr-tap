@@ -1,6 +1,6 @@
 # FedRAMP 20x VDR Plugin Specification
 
-**`fedramp_20x_vdr` evaluates every vulnerability finding under FedRAMP's Vulnerability Detection and Response rules and computes its deadlines. It starts from the worst case for every factor (a likely exploitable, internet-reachable vulnerability at PAIN N5) and lowers a factor only when evidence is attached, so an unevaluated finding is visible as such and is never mistaken for a safe one.**
+**`fedramp_20x_vdr` evaluates every vulnerability finding under FedRAMP's Vulnerability Detection and Response rules, computes its deadlines, and produces the FedRAMP vulnerability report documents from what the grid holds, whichever evaluation method rates the findings. It starts from the worst case for every factor (a likely exploitable, internet-reachable vulnerability at PAIN N5) and lowers a factor only when evidence is attached, so an unevaluated finding is visible as such and is never mistaken for a safe one.**
 
 ## Plugin Identity
 
@@ -8,8 +8,8 @@
 | --- | --- |
 | Slug | `fedramp_20x_vdr` |
 | Display name | `TAP FedRAMP 20x VDR` |
-| Description | Per-finding FedRAMP 20x Vulnerability Detection and Response evaluation (LEV, IRV, PAIN), the remediation timeframe tables as data, and the deadlines they imply. |
-| Kind | Leaf plugin. It consumes `compliance_core` (findings, vulnerabilities, evidence) and is consumed by the pages and products that show vulnerability posture. |
+| Description | Per-finding FedRAMP 20x Vulnerability Detection and Response evaluation (LEV, IRV, PAIN), the remediation timeframe tables as data, the deadlines they imply, and the FedRAMP VER report documents. |
+| Kind | Leaf plugin. It consumes `compliance_core` (findings, vulnerabilities, evidence) and is consumed by the pages and products that show vulnerability posture, by method plugins that rate findings, and by plugins that deliver its report documents (the first planned is `regscale`). |
 
 Default dimensions, one key for every node and edge the plugin ships:
 
@@ -24,11 +24,12 @@ FedRAMP's rules ask a provider to evaluate each detected vulnerability and then 
 
 **Null is the worst case.** An unset factor is treated as the worst case, and that is actionable: it appears as work to do. A factor leaves null, in the **effective** sense that every Search uses, only through an evidence edge. The stored fields are raw inputs, not answers: a concrete value without evidence can be stored (an edge cannot be checked when its node is written), and it is read as null by every shipped Search, so a page or Search that reads `vdr_evaluation` factors directly instead of through the shipped Searches is non-conformant (`req-fedramp-20x-vdr-effective-7`). The worst-case value is computed where it is read and is never written into the factor, so a reader cannot mistake "no one has looked" for "someone concluded N5". This is the grid's three-state rule (`req-grid-node-observation`): null is unobserved, an empty value is observed-empty, and a concrete value is an observation.
 
-**What the plugin deliberately does not do.** It does not judge anything about a vulnerability's published facts (CVSS, EPSS, KEV, SSVC live on `compliance_vulnerability` in compliance_core). It is not a scanner and mints no findings. It ships no pages or panels in v0.
+**What the plugin deliberately does not do.** It does not judge anything about a vulnerability's published facts (CVSS, EPSS, KEV, SSVC live on `compliance_vulnerability` in compliance_core). It is not a scanner and mints no findings. Its only pages are the three report pages, built from core panels. It does not deliver its documents anywhere: an emitter or a consuming plugin does that.
 
 **Provenance markers.**
 - *Observed:* the FedRAMP pages `reference/vulnerability-detection-and-response`, `reference/vulnerability-evaluation-and-reporting` and `definitions` at `https://www.fedramp.gov/2026/`, read as raw HTML on 2026-10-16 (fetched with curl, tags stripped), including the four timeframe tables and the N0 to N5 definitions (changelog 2026-10-05). The `compliance_core` v0.7.1 spec and models, read on 2026-10-16.
 - *Documented:* the CycloneDX 1.6 JSON schema for the vulnerability analysis states and justifications, read from the CycloneDX repository's master branch on 2026-10-16.
+- *Observed:* the FedRAMP CR26 JSON Schemas of 2026-06-24 (the vulnerability detail report, accepted vulnerability info and historical VER activity schemas at `$schemaVersion` 0.1.1, the common definitions at 0.4.2), the consolidated rules file version 2026.11.02.01, and the VDR/VER migration FAQ, read from local copies on 2026-11-24. The method plugins stackarmor-vdr-tap (`a5afb0c`) and sam-aydlette/aydlette-vdr-tap (`97b1ca7`), and the coalfire-vdr-tap README, read on 2026-11-24. Core's file store, HTML panel, table panel and plugin API router, read in the tap tree on 2026-11-24.
 - *Designed:* everything else in this document. Nothing here has been built or run.
 
 ## Goals
@@ -40,6 +41,7 @@ FedRAMP's rules ask a provider to evaluate each detected vulnerability and then 
 | 3 | Tables As Data | FedRAMP's timeframe tables are seeded rows that cite their rule, not constants in code. |
 | 4 | Computed Deadlines | Deadlines and overdue flags are computed from first detection and the seeded rows, never stored. |
 | 5 | Additive Stages | Attaching evidence in a later stage fills fields; it adds no migration and rewrites no node. |
+| 6 | One Stored Document | Each report document is generated once, validated against FedRAMP's schema and kept; the page, the download and the API all serve those bytes, and no method's code is imported to make it. |
 
 ## Requirements
 
@@ -56,17 +58,31 @@ FedRAMP's rules ask a provider to evaluate each detected vulnerability and then 
 | req-fedramp-20x-vdr-deadlines | [Deadlines](#deadlines) | Implemented | Evaluation deadline, remediation deadline, overdue and acceptance flags as Searches. Needs `first_detected_at` (Issue# 43 - compliance-core-tap, v0.8.4); the runner does the date arithmetic. |
 | req-fedramp-20x-vdr-incidents | [Reportable Incidents](#reportable-incidents) | Implemented | The internet-reachable and non-internet-reachable incident rules as Searches. Ship condition: each is one Search that applies the evidence test itself (`-incidents-6`). |
 | req-fedramp-20x-vdr-summary | [Summary Counts](#summary-counts) | Implemented | The `vdr-summary` `module` Search runner: the counts of the deadline and incident Searches for one scheme, for cards and charts. |
+| req-fedramp-20x-vdr-profile | [Report Profile](#report-profile) | Proposed | The node that declares an offering's FedRAMP ID, package URI, class, reporting start, evaluation scheme and rating method (`RUNS_SEARCH`). |
+| req-fedramp-20x-vdr-rating | [Method Rating Contract](#method-rating-contract) | Proposed | The row shape a method's Search returns (`finding_id`, `pain`, `lev`, `irv`, `evaluated_at`), as a JSON Schema; the export imports no method. |
+| req-fedramp-20x-vdr-finding-state | [Finding State History](#finding-state-history) | Proposed | `vdr_finding_state`, written when a finding's rating or disposition changes, so reports can state history and reductions. |
+| req-fedramp-20x-vdr-report | [Report Documents](#report-documents) | Proposed | `vdr_report`, one per document, the format record of a held file; pinned FedRAMP schemas, validated at generation; periods without gaps. Promoted from Backlog. |
+| req-fedramp-20x-vdr-mapping | [Document Field Mapping](#document-field-mapping) | Proposed | Every schema field from grid facts: disposition, accepted (exception or 192 days), false positives, overdue, KEV and CVE, VER-RPT-NID. Absorbs the former Backlog row Accepted Vulnerability Record (VER-RPT-AVI). |
+| req-fedramp-20x-vdr-generator | [Report Generator](#report-generator) | Proposed | The `vdr_report` collector: scheduled by the instance, run on demand from Administrivia; three documents per active profile. |
+| req-fedramp-20x-vdr-fetch | [Programmatic Fetch](#programmatic-fetch) | Proposed | `list_reports` and `fetch_document`, and the plugin API routes; serve the stored bytes; an emitter's payload source. |
+| req-fedramp-20x-vdr-download | [Download Links](#download-links) | Proposed | The `vdr-reports` Search and a table-panel configuration linking to core's file download; no new route or panel type. |
+| req-fedramp-20x-vdr-document-markup | [Document Markup Search](#document-markup-search) | Proposed | The `vdr-report-markup` runner: heading and formatted-document markup for core's HTML panel, from the stored document. |
+| req-fedramp-20x-vdr-page-vdt | [Vulnerability Detail Report Page](#vulnerability-detail-report-page) | Proposed | Heading, formatted document and download for VER-RPT-VDT. |
+| req-fedramp-20x-vdr-page-avi | [Accepted Vulnerability Info Page](#accepted-vulnerability-info-page) | Proposed | Heading, formatted document and download for VER-RPT-AVI. |
+| req-fedramp-20x-vdr-page-mrh | [Historical Activity Page](#historical-activity-page) | Proposed | Heading, formatted document, download and fetch address for VER-TFR-MRH. |
 | req-fedramp-20x-vdr-nongoals | [v0 Non-Goals](#v0-non-goals) | Proposed | What v0 does not build. |
-| req-fedramp-20x-vdr-report | [VDR Report](#v0-non-goals) | Backlog | The per-period report node and the published JSON schemas (VER-RPT-VDT, VER-RPT-PER, VER-TFR-MRH). |
-| req-fedramp-20x-vdr-grouping | [Grouping](#v0-non-goals) | Backlog | Logical groupings of affected resources (VER-EVA-GRV). |
-| req-fedramp-20x-vdr-false-positive | [False Positive](#v0-non-goals) | Backlog | Disposition of findings evaluated as false positives (VER-EVA-EFP). |
-| req-fedramp-20x-vdr-accepted | [Accepted Vulnerability Record](#v0-non-goals) | Backlog | The explanation and supplementary information for accepted vulnerabilities (VER-RPT-AVI). |
+| req-fedramp-20x-vdr-syntax-colour | [Syntax Colouring](#document-markup-search) | Backlog | Core change in `tap_web`: colour the formatted JSON. The HTML panel's closed class list and element ceiling do not admit it; recommended is a JSON panel type that generates escaped markup itself. |
+| req-fedramp-20x-vdr-api-token | [Machine Access To The API](#programmatic-fetch) | Backlog | Core change in `tap_api`: token or service authentication, so a party outside the instance can fetch the historical document (VER-TFR-MRH). |
+| req-fedramp-20x-vdr-next-reduction | [Projected Next Reduction](#document-field-mapping) | Backlog | `projectedNextReduction` needs a record of a planned mitigation and its target rating. |
+| req-fedramp-20x-vdr-likely-overdue | [Likely Overdue](#document-field-mapping) | Backlog | VER-RPT-VDT item 9's "likely to become an overdue vulnerability"; v0 reports overdue only once past due. |
+| req-fedramp-20x-vdr-grouping | [Grouping](#v0-non-goals) | Backlog | Logical groupings of affected resources (VER-EVA-GRV). Until then the report documents carry one record per finding. |
+| req-fedramp-20x-vdr-false-positive | [False Positive](#v0-non-goals) | Backlog | Evaluating findings as false positives (VER-EVA-EFP). Reporting a false positive already recorded as a compliance_core exception is `req-fedramp-20x-vdr-mapping`. |
 | req-fedramp-20x-vdr-failures | [Failures Are Vulnerabilities](#v0-non-goals) | Backlog | Detection-process failures treated as vulnerabilities (VDR-CSO-FAV). |
 | req-fedramp-20x-vdr-cadence | [Detection Cadence](#v0-non-goals) | Backlog | The scan-frequency rules (VDR-TFR-PDD, -PCD, -PSD, -MVX). |
 | req-fedramp-20x-vdr-low-pain | [N0 And N1 Timeframes](#v0-non-goals) | Backlog | No published timeframe exists for PAIN N0 or N1; waits on FedRAMP. |
 | req-fedramp-20x-vdr-reach-direct | [Direct Reachability](#finding-reach) | Backlog | Computing IRV from the network surface (public routes, listeners, protocol), the direct branch of the reachability model, instead of reading it from the evaluation. |
 | req-fedramp-20x-vdr-reach-shipped | [Shipped Libraries](#finding-reach) | Backlog | Following `SHIPS_LIBRARY` from a package to the programs that load a library it ships. |
-| req-fedramp-20x-vdr-class | [Class Node](#v0-non-goals) | Backlog | Replaces the v0 default class with a node that records the class. |
+| req-fedramp-20x-vdr-class | [Class Node](#v0-non-goals) | Backlog | Replaces the v0 default class of the shipped Searches with a node that records the class. The report profile already records it for the export (`req-fedramp-20x-vdr-profile`); this row is pointing the Searches at it. |
 | req-fedramp-20x-vdr-partial | [Partly Evaluated Lookups](#v0-non-goals) | Backlog | Exact deadlines for evaluations with some factors set (v0 shows the worst-case bound); needs a per-finding lookup with a null default in Gryphon. |
 
 ### Evaluation
@@ -450,6 +466,462 @@ Inputs: `view` (`counts`, the default, or `by_view`), `now`, `fedramp_class` (de
 | req-fedramp-20x-vdr-summary-4 | Bad Input Refused | Implemented | An unknown input, a `view` other than the two and a class other than a to d are refused with a `ValueError`. | |
 | req-fedramp-20x-vdr-summary-5 | Registered, Read Only | Implemented | The runner is registered as `tap_plugin.fedramp_20x_vdr.searches.clocks:vdr-summary` and writes nothing. | |
 
+### Report Profile
+----
+RID: `req-fedramp-20x-vdr-profile`
+
+Status: `Proposed`
+
+The report documents describe one cloud service offering, under one FedRAMP class, rated by one method. Part of that cannot be derived from the grid: the offering's FedRAMP ID, the address of its Certification Package Overview, its class, the instant reporting began, and which method rates its findings. TAP has no plugin-configuration model and a collector cannot carry per-instance configuration (the Development note of `req-fedramp-20x-vdr-coverage-snapshot`), so these declarations are a node: the report profile. It is what the provider declares about how its offering reports, it has history, and a person can edit it.
+
+Rejected: Search ids hard-coded in a collector subclass, as the coverage snapshot does (a FedRAMP ID and a URI are not code, and one instance may report for two offerings); settings or environment variables (plugin configuration must not live in shared infrastructure, AGENTS.md); Search input defaults (they cannot hold a FedRAMP ID, and a default is a value nobody declared).
+
+#### Implementation
+
+Entity type `fedramp_20x_vdr__vdr_report_profile`. `NATURAL_KEY = ("profile_key",)`. Default dimensions `{"fedramp.rule": "vdr"}`. Seeded by the instance, never by this plugin.
+
+| field | meaning |
+| --- | --- |
+| `profile_key` | Required, 1 to 64 characters of `[a-z0-9_-]`. The identity, and a path segment of the stored files and the API. |
+| `fedramp_id` | Required, 1 to 64 characters of `[A-Za-z0-9._-]`. The FedRAMP ID, or the provider's placeholder until one is assigned (CDS-CSO-FID note). |
+| `certification_package_overview_uri` | Required, `format: uri`. Written into every document (the schemas require it). |
+| `fedramp_class` | `a` to `d`, or `null`. `null` is unobserved: the export uses `d` and every report it generates records `class_assumed: true`, as the shipped Searches already state an assumed class (`req-fedramp-20x-vdr-effective-3`). |
+| `reporting_start` | Required, `format: date-time`. The `from` of the first Vulnerability Detail and Accepted Vulnerability Info period, and the start of the historical document. Never defaulted: a default would invent the start of a period. |
+| `evaluation_scheme` | Required, 1 to 64 characters. The `vdr_evaluation` scheme that defines which findings the documents cover and whose evidence-backed factors are the fallback for LEV and IRV: `max` for the VDR-max stage, or a method's own scheme (for example `aydlette`). |
+| `method_inputs` | JSON object, default `{}`. Passed verbatim to the method Search as its inputs; the Search validates them against its own input schema when it runs. Lossless configuration for another component, so a blob rather than columns. |
+| `active` | Boolean, default `true`. An inactive profile is not generated. |
+
+`RUNS_SEARCH` runs from a `vdr_report_profile` to a tap_grid `search` node: the Search that rates the profile's findings under the contract of `req-fedramp-20x-vdr-rating`. Plain identity, default dimension. At most one per profile; none is allowed and means no method rates this offering yet.
+
+The class here is read by the export only. The shipped deadline, incident and summary Searches keep their `fedramp_class` input until `req-fedramp-20x-vdr-class` (Backlog) points them at a node.
+
+#### Acceptance Criteria
+
+| ACID | Title | Status | Description | Notes |
+| --- | --- | :---: | --- | --- |
+| req-fedramp-20x-vdr-profile-1 | Keyed By Profile Key | Proposed | `vdr_report_profile` declares `NATURAL_KEY = ("profile_key",)`; a second write with the same key is the same node. | |
+| req-fedramp-20x-vdr-profile-2 | Declarations Required | Proposed | A write without `fedramp_id`, `certification_package_overview_uri`, `reporting_start` or `evaluation_scheme`, or with any of them outside its pattern or format, is refused. | |
+| req-fedramp-20x-vdr-profile-3 | Class Assumed Visibly | Proposed | With `fedramp_class` null, the generator uses `d` and every report it writes for the profile has `class_assumed` true; with a class set, `class_assumed` is false. | |
+| req-fedramp-20x-vdr-profile-4 | At Most One Method | Proposed | A profile with two `RUNS_SEARCH` edges is reported by a check, and the generator fails that profile, naming both Searches. | |
+| req-fedramp-20x-vdr-profile-5 | No Method Is Allowed | Proposed | A profile with no `RUNS_SEARCH` edge generates valid documents in which no record carries a rating (`req-fedramp-20x-vdr-mapping-3`). | The VDR-max stage can report before any method is installed. |
+
+### Method Rating Contract
+----
+RID: `req-fedramp-20x-vdr-rating`
+
+Status: `Proposed`
+
+The export must work with any VDR evaluation method and import none. Every method so far already publishes its ratings as a `module` Search (`stackarmor-pain`, `aydlette-pain`), so the contract is the shape of a row the export reads from that Search, and nothing more. It is declared as a JSON Schema in this plugin, so a method author checks conformance against a file, never against export code.
+
+Rejected: importing a method's Python (couples the export to each method); having methods write PAIN to `vdr_evaluation` (refused in v0, `req-fedramp-20x-vdr-evaluation-6`, and every method computes on read); a per-method column map on the profile (both methods read on 2026-11-24 already use the contract's names, so the map would be configuration with no user).
+
+#### Implementation
+
+`data/method_rows.schema.json`, with a `description` at the top and on every property. Columns the export reads; every other column is ignored:
+
+| column | meaning |
+| --- | --- |
+| `finding_id` | Required. The entity id of the `compliance_finding` rated. |
+| `pain` | `N0` to `N5`, or `null` (the method could not rate this row). |
+| `lev` | Boolean or `null`. Likely exploitable. |
+| `irv` | Boolean or `null`. Internet reachable. |
+| `evaluated_at` | Optional, `format: date-time` or `null`. When the method's evaluation was completed, if the method knows. |
+
+**Several rows for one finding** (a finding on two owners in `stackarmor-pain`, a finding naming two CVEs in `aydlette-pain`) are reduced fail-safe: `pain` is the highest level, or `null` if any row is `null`, because an unrated part could be the worst; `lev` and `irv` are true if any row is true, false only if every row is false, and `null` otherwise; `evaluated_at` is the latest, or `null` if any row lacks one.
+
+**Three states.** A `null` rating stays unknown in the documents: the field is omitted and the record says so (`req-fedramp-20x-vdr-mapping`). It is never written as N5. The deadline still reads it as N5 (`req-fedramp-20x-vdr-effective`), and the overdue explanation says that it did.
+
+**Independence, tested against two methods as read on 2026-11-24.**
+
+| Method | Rows | Fit |
+| --- | --- | --- |
+| `stackarmor-pain` (stackarmor-vdr-tap `a5afb0c`) | One per finding, owner and container; `finding_id`, `pain` N1 to N5, `lev`, `irv`; no `evaluated_at`. | Conforms unchanged. |
+| `aydlette-pain` (sam-aydlette/aydlette-vdr-tap `97b1ca7`) | One per finding and CVE, every open finding including those with no CVE; `finding_id`, `pain` N0 to N5, `lev`, `irv`, plus clock, gates, dispositions and bases, which the export ignores. Its `fedramp_class` input is required. | Conforms unchanged; the profile passes `fedramp_class` (and a `max_results` large enough for the cohort) in `method_inputs`, and sets `evaluation_scheme` to `aydlette`, the scheme its bridge collector writes. |
+| `coalfire_vdr` (README only, no code) | Holds a finding at N3 when an input is missing, so returns a level for every row. | Conforms if its Search returns the four columns. |
+
+The PAIN a method returns is that method's output, not an evaluation: `vdr_evaluation.pain` stays refused.
+
+#### Acceptance Criteria
+
+| ACID | Title | Status | Description | Notes |
+| --- | --- | :---: | --- | --- |
+| req-fedramp-20x-vdr-rating-1 | Rows Validated | Proposed | A row that does not validate against `data/method_rows.schema.json` fails that profile's generation with an error naming the Search, the row and the column; nothing is written for the profile. | |
+| req-fedramp-20x-vdr-rating-2 | No Method Imported | Proposed | No module of this plugin imports a method plugin; a test lists the plugin's imports and finds only TAP core, `compliance_core`, `computing_core` and the standard library. | |
+| req-fedramp-20x-vdr-rating-3 | Reduction Fails Safe | Proposed | Two rows for one finding with `N3` and `N4` give `N4`; with `N3` and `null` give `null`; `lev` of `false` and `null` gives `null`; `false` and `false` gives `false`. | |
+| req-fedramp-20x-vdr-rating-4 | Two Methods Unchanged | Proposed | Fixtures in the row shapes of `stackarmor-pain` and `aydlette-pain` as read on 2026-11-24 each produce three valid documents with no change to export code. | The independence test. |
+| req-fedramp-20x-vdr-rating-5 | The Whole Result | Proposed | The generator reads every page of the Search's result; a result the runner reports as truncated fails the profile. | A silently partial result would drop ratings. |
+| req-fedramp-20x-vdr-rating-6 | Strangers Are Counted | Proposed | Rows whose `finding_id` is outside the profile's findings are counted in a warning and reported nowhere. | |
+
+### Finding State History
+----
+RID: `req-fedramp-20x-vdr-finding-state`
+
+Status: `Proposed`
+
+The Vulnerability Detail Report asks for the historical and current N-rating and the time and rating of each reduction (VER-RPT-VDT items 6 and 7), and the historical document asks for history (VER-TFR-MRH). Methods compute on read and keep none: Aydlette's own "rating changes are appended" is Backlog for that reason (`req-aydlette-vdr-pain-9`). So each time the generator runs it records the state of each finding under each profile, as a node, and only when that state changed.
+
+Rejected: reading node history (history is an audit trail, not a Search read path); a full snapshot node per finding per run (grows with findings times runs and records nothing a change point does not); writing PAIN onto `vdr_evaluation` (refused in v0); re-reading earlier stored documents (a document is an output, not a record to compute from).
+
+#### Implementation
+
+Entity type `fedramp_20x_vdr__vdr_finding_state`. `NATURAL_KEY = ("profile_key", "finding_source", "finding_source_key", "observed_at")`. `EVENT_TIME` is `observed_at`. Default dimensions `{"fedramp.rule": "vdr"}`.
+
+| field | meaning |
+| --- | --- |
+| `profile_key` | The profile this state was recorded under. |
+| `finding_source`, `finding_source_key` | The finding's `source` and `source_key`, verbatim. |
+| `observed_at` | The generation instant at which the state was first seen. |
+| `pain` | `N0` to `N5`, or `null`: the reduced rating of `req-fedramp-20x-vdr-rating`. |
+| `likely_exploitable`, `internet_reachable` | Boolean or `null`, as reported (`req-fedramp-20x-vdr-mapping`). |
+| `disposition` | `active`, `accepted`, `false-positive`, `remediated`, `partially-mitigated` or `fully-mitigated` (`req-fedramp-20x-vdr-mapping`). |
+| `search_id` | The `search` node that produced the rating, or `null` when the profile has no method. |
+
+`TRACKS_COMPLIANCE_FINDING` runs from a `vdr_finding_state` to its `compliance_finding`. Plain identity, default dimension.
+
+A state is written when the finding has none under the profile, or when `pain`, `likely_exploitable`, `internet_reachable` or `disposition` differs from its latest. A state is never updated or deleted, and the generator never sends a key that exists (a GRIFT node sent under an existing key replaces the row, `req-fedramp-20x-vdr-collector`).
+
+**What the times mean.** `observed_at` is when the generator saw the state, so a reduction is reported no earlier than it happened and at most one generator interval later. The reports say so on the history page (`req-fedramp-20x-vdr-page-mrh`).
+
+**What it is not.** It is a record of what the configured method returned and when, not an evaluation. No deadline, incident or summary Search reads it, so `req-fedramp-20x-vdr-effective-7` is unaffected. It is the one place this plugin writes a PAIN value.
+
+#### Acceptance Criteria
+
+| ACID | Title | Status | Description | Notes |
+| --- | --- | :---: | --- | --- |
+| req-fedramp-20x-vdr-finding-state-1 | First Run Records Every Finding | Proposed | After the first run of a profile, every finding in its documents has exactly one state, with an edge to the finding. | |
+| req-fedramp-20x-vdr-finding-state-2 | Unchanged Is Not Rewritten | Proposed | A second run with no change in rating or disposition writes no state. | |
+| req-fedramp-20x-vdr-finding-state-3 | A Change Is A New Node | Proposed | A rating that moves from N4 to N3 between runs writes one new state; the earlier state is unchanged. | |
+| req-fedramp-20x-vdr-finding-state-4 | Append Only | Proposed | No code path sends a `vdr_finding_state` whose key exists, or deletes one. | |
+| req-fedramp-20x-vdr-finding-state-5 | Not A Rules Input | Proposed | No shipped deadline, incident or summary Search reads `vdr_finding_state`. | |
+
+### Report Documents
+----
+RID: `req-fedramp-20x-vdr-report`
+
+Status: `Proposed`
+
+Each generated document is one `vdr_report` node and one file held in TAP's file store (`specs/spec-tap-file-store.md` in core). The node is the file's format record (`req-tap-files-format-record`): what the bytes are, for which profile and period, against which schema. The three kinds are the FedRAMP schemas of 2026-06-24: the Vulnerability Detail Report (`vdt`, VER-RPT-VDT and VER-RPT-PER), Accepted Vulnerability Info (`avi`, VER-RPT-AVI) and Historical VER Activity (`mrh`, VER-TFR-MRH).
+
+Rejected: the JSON body in a field of the node (a whole document read whole belongs in the one store core keeps for documents, which also gives the digest, the download route and kept versions); one node per period holding three bodies (a format record describes one file).
+
+#### Implementation
+
+Entity type `fedramp_20x_vdr__vdr_report`. `NATURAL_KEY = ("profile_key", "kind", "generated_at")`. `EVENT_TIME` is `generated_at`. Default dimensions `{"fedramp.rule": "vdr"}`.
+
+| field | meaning |
+| --- | --- |
+| `profile_key`, `kind` | The profile, and `vdt`, `avi` or `mrh`. |
+| `generated_at` | The generation instant, shared by the three documents of one run. |
+| `period_from`, `period_to` | For `vdt` and `avi`, the document's `reportPeriod`. For `mrh`, the span it covers: the profile's `reporting_start` to `generated_at`. `period_to` always equals `generated_at`. |
+| `schema_id`, `schema_version` | The document schema's `$id` and `$schemaVersion`. |
+| `fedramp_id`, `fedramp_class`, `class_assumed`, `evaluation_scheme`, `method_search_id` | Copied from the profile at generation, because a report states what it was generated with and the profile can change later. `method_search_id` is `null` when the profile has no method. |
+| `record_count` | The number of records in the document. |
+
+`APPLIES_REPORT_PROFILE` runs from a `vdr_report` to its profile. `FOLLOWS_VDR_REPORT` runs from a `vdr_report` to the previous report of the same profile and kind; the first has none. Both plain identity, default dimension.
+
+**The body.** A new `tap_file` per document, held through core's `hold_file`, at `fedramp_20x_vdr/<profile_key>/<kind>/<fedramp_id>-<kind>-<generated_at as YYYYMMDDTHHMMSSZ>.json` with media type `application/json`: a new file each time, never a new version of one (`req-tap-files-hold`, "What is normally a new file"). The plugin then writes `FILE_CONTENTS` from the `tap_file` to the `vdr_report`, carrying the file's `sha256`. The manifest declares `[file_store] required = true`.
+
+**Periods without gaps (VER-RPT-PER).** The first `vdt` and `avi` periods start at `reporting_start`; each later period starts at the `period_to` of the latest recorded report of its kind and ends at the generation instant.
+
+**Pinned schemas, validated at generation.** The four FedRAMP files (the three document schemas and the common definitions they reference) are vendored byte for byte in `data/fedramp/`, their digests pinned by a test. Each document is validated against its schema (JSON Schema 2020-12, `$ref` resolved from the vendored copies by `$id`, never over the network) before anything is held. `format` is checked for `date-time` and `uri` by checkers this plugin registers from the standard library: jsonschema's own `date-time` check depends on an optional package and passes everything without it. An invalid document fails the profile (`req-fedramp-20x-vdr-generator`) with every error's JSON pointer. A new FedRAMP schema release is a data change: new vendored files and a new `schema_id`. No new dependency: `jsonschema` and `referencing` are already in core.
+
+**FedRAMP ID (CDS-CSO-FID).** The 2026-06-24 schemas have no field for it. The ID is in each file's name, on the report node and in the fetch responses (`req-fedramp-20x-vdr-fetch`); the body stays exactly the schema's shape, and the Certification Package Overview it points to carries the ID.
+
+**Kept (CDS-CSO-HAD).** The file store keeps every file and deletes nothing (`req-tap-files-immutable`), and this plugin never deletes a report node. A retention policy waits on `req-tap-files-retention` in core.
+
+**Core dependency.** `FILE_CONTENTS` is `In Development` in core; the plugin's `requires_tap` rises to the first release that ships it. The generator's actor needs `files.create`; if the collector actor does not hold it, granting it is a core change.
+
+#### Acceptance Criteria
+
+| ACID | Title | Status | Description | Notes |
+| --- | --- | :---: | --- | --- |
+| req-fedramp-20x-vdr-report-1 | One Node, One File | Proposed | Each run writes, per active profile, three `vdr_report` nodes and three held files, each file joined to its node by `FILE_CONTENTS` whose `sha256` equals the file's. | |
+| req-fedramp-20x-vdr-report-2 | Validated Before Held | Proposed | A document that fails its schema is not held, no node is written for the profile in that run, and the error names the schema `$id` and the JSON pointer. | |
+| req-fedramp-20x-vdr-report-3 | Formats Are Checked | Proposed | A document whose `detectedAt` is not an RFC 3339 date-time, or whose `certificationPackageOverviewUri` is not a URI, fails validation. | Proves the checkers are active. |
+| req-fedramp-20x-vdr-report-4 | Periods Chain | Proposed | The first `vdt` and `avi` reports start at `reporting_start`; each later one starts at its predecessor's `period_to`; a check reports any gap, overlap or two reports following one. | |
+| req-fedramp-20x-vdr-report-5 | Schemas Pinned | Proposed | The vendored schema files match their pinned digests, and every report records the `$id` and `$schemaVersion` it was validated against. | |
+| req-fedramp-20x-vdr-report-6 | Kept | Proposed | No code path in the plugin deletes a `vdr_report` or its file. | |
+| req-fedramp-20x-vdr-report-7 | FedRAMP ID Carried | Proposed | Every held file's name and every report node carry the profile's `fedramp_id`. | |
+
+### Document Field Mapping
+----
+RID: `req-fedramp-20x-vdr-mapping`
+
+Status: `Proposed`
+
+How each schema field is filled from facts on the grid. It absorbs the former Backlog row "Accepted Vulnerability Record" (VER-RPT-AVI). The rule throughout: a field is written only from an observed value; an optional field with no value is omitted; nothing is invented. FedRAMP's own guidance points the same way: leave inapplicable ratings unset where the schema permits rather than inventing one, and schema validity alone does not make a report complete (vdr-migration FAQ 34 and 38, read 2026-11-24).
+
+Rejected: reporting unknown LEV, IRV or PAIN as the worst case (the worst case is how deadlines are computed, not a statement that someone evaluated the vulnerability); omitting findings with missing facts (hides a vulnerability).
+
+#### Implementation
+
+**Findings covered.** Every `compliance_finding` with a non-empty `source` and `source_key` that a `vdr_evaluation` of the profile's `evaluation_scheme` evaluates.
+
+**Disposition**, first match wins. An exception is in force when its `status` is `active` and its `expires_at` is null or after the generation instant; it covers a finding through `GRANTS_COMPLIANCE_EXCEPTION_INSTANCE` and `COVERS_COMPLIANCE_FINDING`.
+
+| # | Disposition | When |
+| --- | --- | --- |
+| 1 | `false-positive` | An exception in force of kind `false-positive`, or `not-affected` with any justification but `inline_mitigations_already_exist`. |
+| 2 | `remediated` | The finding's `status` is `resolved` (FedRAMP: no longer detected). |
+| 3 | `accepted` | An exception in force of kind `accepted-risk` or `operational-requirement`; or the finding is open, not fully mitigated, and the anchor plus the `VER-TFR-MAV` row's hours (192 days) is not after the generation instant. |
+| 4 | `fully-mitigated` | An exception in force of kind `not-affected` with `inline_mitigations_already_exist`, or `mitigated` with a current rating of N0. |
+| 5 | `partially-mitigated` | Any other exception in force of kind `mitigated`. compliance_core does not say whether a mitigation is full, so the smaller claim is made. |
+| 6 | `active` | Otherwise. |
+
+The **anchor** is `evaluationCompletedAt`, else `detectedAt`: the earlier bound, as in `req-fedramp-20x-vdr-deadlines`.
+
+**Which document.** `accepted` goes to Accepted Vulnerability Info and to the historical document's `acceptedVulnerabilities`; every other disposition goes to the Vulnerability Detail Report and to `activeVulnerabilities`. An accepted vulnerability whose exception lapses returns to the detail report (vdr-migration FAQ 37). A detail or accepted report lists every finding currently `active`, `accepted` or mitigated, and every finding whose state became `false-positive` or `remediated` inside the period (`req-fedramp-20x-vdr-finding-state`). The historical document lists every finding that has a state under the profile, at its latest state.
+
+**`vulnerabilityDetail`.**
+
+| Field | Source |
+| --- | --- |
+| `providerTrackingId` | `vdr-` and the first 24 hexadecimal characters of SHA-256 over `source`, U+001F and `source_key`. Derived from the finding's natural key, so stable across runs, reloads and grids, and opaque: no path, host or repository name leaves in it. |
+| `detection.detectedAt` | `first_detected_at`; when null, the finding entity's creation time, and the supplementary text says the source gave no detection time. |
+| `detection.detectionSource` | The `name` of the `compliance_scanner` that `DETECTS_COMPLIANCE_FINDING` it, or that `PERFORMS_COMPLIANCE_SCAN_RUN` the run that `REPORTS_COMPLIANCE_FINDING` it; else the finding's `source`. |
+| `vulnerabilityDescription` | For each linked `compliance_vulnerability`, its `vuln_id` and `title`; for a finding with none, the finding's `name`. |
+| `potentialAgencyImpact` | When rated, the rating and the name of the Search that produced it; omitted when unrated. |
+| `evaluationCompletedAt` | The method row's `evaluated_at`; else the `observed_at` of the first state with `pain`, `likely_exploitable` and `internet_reachable` all set; omitted when no state ever was. |
+| `isInternetReachable`, `isLikelyExploitable` | The method row; else `backed_factors` for the profile's `evaluation_scheme`; omitted when both are unknown. |
+| `currentRating` | The method's `pain` as an integer; omitted when `null` or `false-positive`. |
+| `painReductionEvents` | Each state whose `pain` is lower than the previous non-null `pain`: `reducedAt` its `observed_at`, `rating` its `pain`. `[]` when the finding was rated and never reduced; omitted when it was never rated. |
+| `projectedNextReduction` | Omitted: nothing records a planned mitigation (`req-fedramp-20x-vdr-next-reduction`, Backlog). |
+| `overdueStatus` | Below; omitted for `false-positive` and `remediated`. |
+| `supplementaryRiskInformation` | Composed from the allowlist below: CVE ids and aliases; CISA KEV listing date and due date when `kev` is true; EPSS score and date; and each absence that applies (not rated, LEV or IRV not evaluated, detection time not given, class assumed, no method configured). The schemas have no KEV or CVE field, so they are carried here. |
+| `finalDisposition` | `False Positive`, `Remediated`, `Fully Mitigated` or `Partially Mitigated` from the disposition; omitted for `active` and `accepted`. |
+
+**`acceptedVulnerabilityInfo`.** `vulnerabilityDetail` as above. `acceptanceRationale` is the exception's kind and `description` (by compliance_core's convention, the business rationale); an empty description gives "`<kind>` exception recorded with no rationale" and a warning naming the exception. Acceptance by the 192-day rule gives "Not fully mitigated or remediated within 192 days of `<evaluation | detection>` (VER-TFR-MAV)".
+
+**`overdueStatus`**, first match:
+
+1. `kev` true and `kev_due_date` before the generation instant: overdue, "Past the CISA KEV due date `<date>` (VDR-TFR-KEV)".
+2. Rating not complete and `detectedAt` plus the class's `VER-TFR-EVU` hours before the instant: overdue, "Not evaluated within `<n>` days of detection (VER-TFR-EVU, class `<x>`)".
+3. The anchor plus `deadline_hours(class, pain, column(lev, irv))`, with unknown values read as N5 and true (`req-fedramp-20x-vdr-effective`), before the instant: overdue, naming the hours, the cell and the anchor, and which inputs were read as the worst case.
+4. Otherwise not overdue, with "Due `<date>`", or "No FedRAMP timeframe for `<N>`" when `deadline_hours` returns `None`.
+
+This is the exact deadline for a rated finding, computed in Python from `deadline_hours`. The shipped `vdr-deadlines` Search keeps its worst-case bound, and `req-fedramp-20x-vdr-partial` (Backlog) still concerns that Search.
+
+**Nothing exploit-enabling (VER-RPT-NID).** Every text field is composed only from the sources named above. Never written: a finding's `description` or `summary`, `source_key`, any component, host, container, program, path, URL or port, a CVSS vector, or any free text a method returns (bases, rationales). Two provider-authored texts remain the provider's responsibility and the pages say so: the `name` of a finding with no vulnerability, and an exception's `description`.
+
+#### Acceptance Criteria
+
+| ACID | Title | Status | Description | Notes |
+| --- | --- | :---: | --- | --- |
+| req-fedramp-20x-vdr-mapping-1 | Tracking Id Stable | Proposed | One `source` and `source_key` give the same `providerTrackingId` on every run and every grid; two different keys give different ids. | |
+| req-fedramp-20x-vdr-mapping-2 | Required Fields Always Filled | Proposed | Every record has `providerTrackingId`, `detectedAt`, `detectionSource` and `vulnerabilityDescription`, including a finding with no `first_detected_at` and no vulnerability. | |
+| req-fedramp-20x-vdr-mapping-3 | Unknown Is Omitted | Proposed | A finding the method did not rate has no `currentRating`; with LEV unknown to both the method and the evidence, no `isLikelyExploitable`; the supplementary text names each absence. | |
+| req-fedramp-20x-vdr-mapping-4 | Disposition Precedence | Proposed | A table test covers each row of the disposition table and each pair of overlapping conditions. | |
+| req-fedramp-20x-vdr-mapping-5 | Accepted Two Ways | Proposed | An `accepted-risk` exception in force puts the finding in Accepted Vulnerability Info with the exception's description as rationale; an open finding 192 days past its anchor goes there with the VER-TFR-MAV rationale; an expired exception returns the finding to the detail report. | Absorbs the former Backlog row Accepted Vulnerability Record (VER-RPT-AVI). |
+| req-fedramp-20x-vdr-mapping-6 | False Positives Reported, Not Rated | Proposed | A false positive appears in the detail report with `finalDisposition` `False Positive` and no `currentRating` or `overdueStatus`. | |
+| req-fedramp-20x-vdr-mapping-7 | Overdue Explained | Proposed | Each of the three overdue causes yields `isOverdue` true with its explanation, and the schema's rule that an overdue record has an explanation holds. | |
+| req-fedramp-20x-vdr-mapping-8 | Reductions From History | Proposed | States N5, N3, N3, N2 give two reduction events; a finding never rated has no `painReductionEvents`; one rated and never reduced has `[]`. | |
+| req-fedramp-20x-vdr-mapping-9 | Nothing Exploit-Enabling | Proposed | A finding whose description, `source_key` and component name each contain a marker string yields three documents in which no marker appears. | |
+
+### Report Generator
+----
+RID: `req-fedramp-20x-vdr-generator`
+
+Status: `Proposed`
+
+A Schedule can fire only a collector (`req-tap-cares-scheduler-scope-1`), and emitters are Proposed and unbuilt (`req-tap-cares-v0-emitter`). Generation writes to the grid (states, report nodes, held files), which is what a collector does, so the generator is a derived collector like `vdr_max`. The on-demand path is the same collector run from the Administrivia panel (`run_collection`, which records `manual_run`). Neither needs a core change.
+
+Rejected: a management command (no Schedule can fire it and it leaves no run record on the grid); waiting for emitters (the generator sends nothing anywhere; delivery is the consuming plugin's).
+
+#### Implementation
+
+`tap_plugin/fedramp_20x_vdr/collectors/vdr_report/collector.py`, registered as `vdr_report` under scope `fedramp_20x_vdr`. For each active profile, in `profile_key` order, independently:
+
+1. Read the findings, exceptions, vulnerabilities, evaluations and states through Gryphon (`tap_grid.gryphon.read_scope`) and `backed_factors`.
+2. Run the profile's method Search through `tap_grid.search.execute_search` with `method_inputs`, every page; validate and reduce the rows (`req-fedramp-20x-vdr-rating`).
+3. Classify, and build the three documents in memory, with history from the stored states plus this run's.
+4. Validate all three (`req-fedramp-20x-vdr-report`).
+5. Submit the new states as one GRIFT batch.
+6. Hold the three files.
+7. Submit the three report nodes, their edges and `FILE_CONTENTS` as one GRIFT batch.
+
+A failure fails that profile and writes nothing further for it; the other profiles proceed, and the run is failed and names each failed profile. A failure after step 6 leaves held files with no report node, a state core accepts (`req-tap-files-hold`), and does not advance the period chain, so the next run's period starts at the last recorded report and no gap appears.
+
+No credential and no external call. The Schedule is the instance's, as for the coverage snapshot: weekly is often enough for every class (VER-TFR-MRH asks for at most 7 days at class D; VER-TFR-MHR asks for monthly).
+
+#### Acceptance Criteria
+
+| ACID | Title | Status | Description | Notes |
+| --- | --- | :---: | --- | --- |
+| req-fedramp-20x-vdr-generator-1 | Registered | Proposed | `vdr_report` is registered under scope `fedramp_20x_vdr` at `ready()` with a name and description, and reconciles to one `Collector` node. | |
+| req-fedramp-20x-vdr-generator-2 | Three Per Profile | Proposed | One run on a grid with two active profiles and one inactive writes three reports for each active profile and none for the inactive one. | |
+| req-fedramp-20x-vdr-generator-3 | Failures Stay Local | Proposed | With profile A's method returning an invalid row, A writes nothing, B writes its three reports, and the run is failed naming A. | |
+| req-fedramp-20x-vdr-generator-4 | No Gap After A Failure | Proposed | A run that fails after holding files is followed by a run whose `vdt` period starts at the last recorded report's `period_to`. | |
+| req-fedramp-20x-vdr-generator-5 | Reads Through Search | Proposed | Method rows are read only through `execute_search`, grid facts only through `read_scope`; the collector reads no `Entity` or `Edge` directly. | |
+| req-fedramp-20x-vdr-generator-6 | On Demand Is The Same Run | Proposed | A run started from the Administrivia panel writes the same kinds of output as a scheduled run, and its run record has `manual_run` true. | |
+
+### Programmatic Fetch
+----
+RID: `req-fedramp-20x-vdr-fetch`
+
+Status: `Proposed`
+
+Collectors and emitters (the first is the planned `regscale` plugin) and an agency's tooling need each document. This is the payload source for an emitter: core is building the emitter primitive (Issue# 1357 - tap), and delivery (destination, credentials, retries, the delivery record) is the emitter's. Nothing here sends anything. One Python function and one plugin API router give the documents out, and both serve the stored document, never a fresh one:
+
+- the page, the download and the API then return the same bytes, so human-readable and machine-readable output agree by construction (CDS-CSO-CBF);
+- a snapshot is what was reported (CDS-CSO-HAD);
+- a document is one period of a chain (VER-RPT-PER), and because methods compute on read, regenerating would either mint a new period or give an old period a different answer;
+- the digest is a stable `ETag`, so a consumer uploads each document once.
+
+A consumer that needs a fresher document runs the generator.
+
+#### Implementation
+
+**Python**, in `tap_plugin/fedramp_20x_vdr/reports.py`, typed and importable. These are the names an emitter's payload builder calls, and they are the contract: a change to them is a breaking change of this plugin.
+
+- `list_reports(profile_key, *, kind=None, db_alias)` returns `ReportRef` values, newest first: `report_id`, `file_id`, `kind`, `period_from`, `period_to`, `generated_at`, `schema_id`, `schema_version`, `fedramp_id`, `sha256`, `file_name`.
+- `fetch_document(profile_key, kind, *, generated_at=None, db_alias)` returns a `ReportDocument` (its `ReportRef` and `content` bytes); the latest when `generated_at` is `None`; raises `ReportNotFound` when there is none.
+
+Nodes are read through `read_scope`, bytes through core's gateway `open_file`, so the `files.read` check, the digest check and the operation log are core's.
+
+**HTTP**, a router returned by `get_api_router()`, mounted by core at `/api/v1/plugins/fedramp_20x_vdr/`:
+
+| Route | Returns |
+| --- | --- |
+| `GET reports/{profile_key}` | The `ReportRef` list as JSON, newest first; optional `?kind=`. |
+| `GET reports/{profile_key}/{kind}/latest` | The latest document of that kind. |
+| `GET reports/{profile_key}/{kind}/{generated_at}` | The document generated at that instant (`YYYYMMDDTHHMMSSZ`). |
+
+A document response is the stored bytes verbatim, `Content-Type: application/json`, `ETag` the digest, `Link: <schema $id>; rel="describedby"`, and `Content-Disposition: inline` with the held file's name, which carries the FedRAMP ID. `kind` is `vdt`, `avi` or `mrh`; anything else, an unknown profile, or no document is `404`; a caller without `files.read` is `403`; an integrity failure is `500` with no detail.
+
+**Auth.** Core's API has session authentication only (`tap_api/auth.py`). In-process callers such as a consuming plugin use the Python functions and need no HTTP authentication. Retrieval by a party outside the instance, which VER-TFR-MRH describes ("for automated retrieval ... using an API service"), needs token or service authentication in core: a core change, `req-fedramp-20x-vdr-api-token` (Backlog).
+
+#### Acceptance Criteria
+
+| ACID | Title | Status | Description | Notes |
+| --- | --- | :---: | --- | --- |
+| req-fedramp-20x-vdr-fetch-1 | Latest By Default | Proposed | `fetch_document` without `generated_at`, and the `latest` route, return the newest document of the kind. | |
+| req-fedramp-20x-vdr-fetch-2 | Same Bytes Everywhere | Proposed | The API body, the Python `content` and the core download of the same file are identical, and their digest equals the node's. | |
+| req-fedramp-20x-vdr-fetch-3 | Never Generates | Proposed | A fetch writes no node and runs no Search; with no document the route is `404` and the function raises `ReportNotFound`. | |
+| req-fedramp-20x-vdr-fetch-4 | Headers Stated | Proposed | A document response carries the content type, the `ETag`, the `Link` to the schema `$id` and a file name containing the FedRAMP ID. | |
+| req-fedramp-20x-vdr-fetch-5 | Gated By The Store | Proposed | A logged-in user without `files.read` is refused by the route and by the function. | |
+
+### Download Links
+----
+RID: `req-fedramp-20x-vdr-download`
+
+Status: `Proposed`
+
+A person downloads each document as JSON. Core already has both halves: `GET /files/<identifier>/download` serves a held file as an attachment with its recorded media type to a user holding `files.read` (`req-tap-files-download`), and the table panel builds a same-origin link per row from a Search (`row_url_template`, `req-web-stdpanel-table-rows-5`). So the reusable capability is one Search and one panel configuration, placed on any page with a different `kind`. No new panel type, route or core change.
+
+Rejected: three one-off buttons; a plugin download route (a second route for bytes core already serves).
+
+#### Implementation
+
+A Search `vdr-reports`, shipped as a GRIFT node in `grift/searches.grift.json`: inputs `profile_key` and `kind`, both optional; rows `report_id`, `file_id` (the `tap_file` joined by `FILE_CONTENTS`), `file_name`, `kind`, `period_from`, `period_to`, `generated_at`, `record_count`, `schema_version`, newest first. Gryphon is the first choice; if it cannot express the join or the order, the choice between a Gryphon capability and a `module` runner goes to the maintainer (AGENTS.md).
+
+The panel configuration is a table panel bound to `vdr-reports` with `kind` fixed, `row_url_template` `/files/{file_id}/download`, and `file_name` as the visible column, so each row is a download link and the first row is the latest. A button-styled control with a fixed label is a `tap_web` enhancement, not needed here.
+
+#### Acceptance Criteria
+
+| ACID | Title | Status | Description | Notes |
+| --- | --- | :---: | --- | --- |
+| req-fedramp-20x-vdr-download-1 | Rows Carry The File | Proposed | Each `vdr-reports` row's `file_id` is the `tap_file` that `FILE_CONTENTS` joins to that report. | |
+| req-fedramp-20x-vdr-download-2 | The Stored Document | Proposed | Following a row's link downloads bytes identical to the fetch of the same report. | |
+| req-fedramp-20x-vdr-download-3 | Reusable By Configuration | Proposed | The same configuration with each of the three `kind` values renders download links for that kind only, with no code. | |
+| req-fedramp-20x-vdr-download-4 | No New Route | Proposed | The plugin declares no URL that serves file bytes. | |
+
+### Document Markup Search
+----
+RID: `req-fedramp-20x-vdr-document-markup`
+
+Status: `Proposed`
+
+Each report page has two parts: a heading that says what the viewer is looking at, and the document itself, formatted. Both are shown with core's HTML panel (slug `html`, `tap_web/specs/spec-web-panels-html.md`), which renders cleaned markup from a bound Search's row field with a closed vocabulary and the theme's palette. This Search is what emits that markup, from the stored document, so the page shows the bytes the API and the download serve.
+
+**What the HTML panel can and cannot do today (read 2026-11-24).** The heading fits it exactly: headings, paragraphs, lists and links to `https` hosts the panel may narrow to. The body fits it **without colour**: the `code` feature admits `pre` and `code`, so formatted JSON shows as monospaced text. Syntax colouring does not fit, for two reasons. First, `class` is limited to ten named classes, none of them a token class, and a class outside them is removed (`req-web-panels-html-clean-7`). Second, colouring by `span` per token would pass the 2000-element ceiling (`req-web-panels-html-clean-8`) on any document past a few hundred tokens. A document over the 262144-byte ceiling fails closed even uncoloured. The cleaner is not loosened for this. The gap goes to core as `req-fedramp-20x-vdr-syntax-colour` (Backlog, core change) with two candidates. One is a narrow extension of the HTML panel's vocabulary: a set of palette-token token classes allowed only on `span` inside `pre`, which also needs the element ceiling raised for that feature. The other is a new `tap_web` panel type for JSON that parses a JSON value and generates escaped, coloured markup itself, so no markup is cleaned and the cleaner is untouched. This spec recommends the second, because it needs no change to what the cleaner admits or to its limits. Until then the body is formatted and uncoloured.
+
+#### Implementation
+
+A `module` Search runner `vdr-report-markup` (`tap_plugin/fedramp_20x_vdr/searches/markup.py`), shipped with a Search node in `grift/searches.grift.json`. It is a runner and not a Gryphon Search because it reads a held file's bytes, which Gryphon does not do (the reason recorded in the Search's description, AGENTS.md). Inputs: `profile_key` (required unless exactly one profile is active), `kind` (`vdt`, `avi` or `mrh`), and optional `generated_at` (default the latest). It reads through `fetch_document` (`req-fedramp-20x-vdr-fetch`), runs nothing else and writes nothing. It returns one row:
+
+| field | markup |
+| --- | --- |
+| `heading_html` | An `h2` naming the document; a paragraph saying which FedRAMP rules it answers (`vdt`: VER-RPT-VDT and VER-RPT-PER; `avi`: VER-RPT-AVI; `mrh`: VER-TFR-MRH); the period, `generated_at`, FedRAMP ID, class and whether it was assumed, and the schema `$id` and `$schemaVersion`; a list of links: the FedRAMP rule pages under `https://www.fedramp.gov/2026/reference/vulnerability-evaluation-and-reporting/`, the schema `$id` URL, and this specification in the plugin's repository. |
+| `body_html` | `pre` and `code` holding the document, parsed and re-serialised with two-space indentation and every character escaped. A document whose formatted form passes the HTML panel's byte ceiling is not cut: the body says how large it is and points at the download, because a partial document shown as the document would mislead. |
+| `report_id`, `file_id` | For a panel that links to the report or the file. |
+
+The rule-page anchors are taken from the rule names (`#vulnerability-details`, `#accepted-vulnerability-info`, `#historical-activity`, `#persistent-reporting`) and checked against the live page when built.
+
+#### Acceptance Criteria
+
+| ACID | Title | Status | Description | Notes |
+| --- | --- | :---: | --- | --- |
+| req-fedramp-20x-vdr-document-markup-1 | Cleans Unchanged | Proposed | For each kind, `heading_html` cleaned by the HTML panel's cleaner with features `text`, `headings`, `lists` and `links`, and `body_html` cleaned with `text` and `code`, are each unchanged by cleaning. | The markup is made to fit the vocabulary; nothing is relied on to be stripped. |
+| req-fedramp-20x-vdr-document-markup-2 | The Stored Document | Proposed | The JSON value parsed back out of `body_html` equals the value of the bytes `fetch_document` returns for the same report. | |
+| req-fedramp-20x-vdr-document-markup-3 | Escaped | Proposed | A vulnerability title containing markup appears in `body_html` as escaped text. | |
+| req-fedramp-20x-vdr-document-markup-4 | Too Large Is Stated | Proposed | A document whose formatted form passes the ceiling yields a body that states its size and points at the download, and contains none of the document. | |
+| req-fedramp-20x-vdr-document-markup-5 | Absence Stated | Proposed | With no report of the kind for the profile, both fields say so and name the profile. | |
+| req-fedramp-20x-vdr-document-markup-6 | Read Only | Proposed | The runner writes nothing and runs no other Search. | |
+
+### Vulnerability Detail Report Page
+----
+RID: `req-fedramp-20x-vdr-page-vdt`
+
+Status: `Proposed`
+
+The page that shows the latest Vulnerability Detail Report of a profile (VER-RPT-VDT, VER-RPT-PER), explains it, and lets a person download it.
+
+#### Implementation
+
+Page slug `vdr-report-detail`, seeded by `grift/pages.grift.json`. Page input `profile_key`. Panels, top to bottom, all configuration:
+
+1. **Heading.** An `html` panel bound to `vdr-report-markup` with `kind` `vdt`, `field` `heading_html`, `features` `text`, `headings`, `lists`, `links`, `link_schemes` `https`, and `link_hosts` limited to `www.fedramp.gov`, `fedramp.gov` and `github.com`. It also states that free text in the report is limited by VER-RPT-NID (`req-fedramp-20x-vdr-mapping`).
+2. **Document.** An `html` panel bound to the same Search, `field` `body_html`, `features` `text` and `code`, `max_bytes` 262144. Formatted, and coloured once `req-fedramp-20x-vdr-syntax-colour` lands.
+3. **Download.** The download table of `req-fedramp-20x-vdr-download` with `kind` `vdt`.
+
+#### Acceptance Criteria
+
+| ACID | Title | Status | Description | Notes |
+| --- | --- | :---: | --- | --- |
+| req-fedramp-20x-vdr-page-vdt-1 | Heading Explains | Proposed | The heading names the document, VER-RPT-VDT and VER-RPT-PER, the period and the FedRAMP ID, and links to the rule page, the schema and this specification. | |
+| req-fedramp-20x-vdr-page-vdt-2 | Same Document | Proposed | The document shown and the file downloaded from the page parse to the same JSON value. | |
+| req-fedramp-20x-vdr-page-vdt-3 | Configuration Only | Proposed | The page adds no panel type and no code; it is a Page node and three panel configurations. | |
+
+### Accepted Vulnerability Info Page
+----
+RID: `req-fedramp-20x-vdr-page-avi`
+
+Status: `Proposed`
+
+The page that shows the latest Accepted Vulnerability Info of a profile (VER-RPT-AVI), explains it, and lets a person download it.
+
+#### Implementation
+
+Page slug `vdr-report-accepted`, seeded by `grift/pages.grift.json`. Page input `profile_key`. The three panels of `req-fedramp-20x-vdr-page-vdt` with `kind` `avi`. The heading also states that acceptance rationales are the provider's own words, taken from its exceptions.
+
+#### Acceptance Criteria
+
+| ACID | Title | Status | Description | Notes |
+| --- | --- | :---: | --- | --- |
+| req-fedramp-20x-vdr-page-avi-1 | Heading Explains | Proposed | The heading names the document, VER-RPT-AVI, the period and the FedRAMP ID, and links to the rule page, the schema and this specification. | |
+| req-fedramp-20x-vdr-page-avi-2 | Same Document | Proposed | The document shown and the file downloaded from the page parse to the same JSON value. | |
+| req-fedramp-20x-vdr-page-avi-3 | Configuration Only | Proposed | The page adds no panel type and no code. | |
+
+### Historical Activity Page
+----
+RID: `req-fedramp-20x-vdr-page-mrh`
+
+Status: `Proposed`
+
+The page that shows the latest Historical VER Activity document of a profile (VER-TFR-MRH), explains it, lets a person download it, and gives the address a program fetches it from: the "URL and access instructions" artifact VER-TFR-MRH names.
+
+#### Implementation
+
+Page slug `vdr-report-history`, seeded by `grift/pages.grift.json`. Page input `profile_key`. The three panels of `req-fedramp-20x-vdr-page-vdt` with `kind` `mrh`. The heading also gives the route `GET /api/v1/plugins/fedramp_20x_vdr/reports/<profile_key>/mrh/latest` and the authentication it needs (`req-fedramp-20x-vdr-fetch`), and states that reduction times are when the generator first observed the lower rating (`req-fedramp-20x-vdr-finding-state`).
+
+#### Acceptance Criteria
+
+| ACID | Title | Status | Description | Notes |
+| --- | --- | :---: | --- | --- |
+| req-fedramp-20x-vdr-page-mrh-1 | Heading Explains | Proposed | The heading names the document, VER-TFR-MRH, the span and the FedRAMP ID, and links to the rule page, the schema and this specification. | |
+| req-fedramp-20x-vdr-page-mrh-2 | Same Document | Proposed | The document shown and the file downloaded from the page parse to the same JSON value. | |
+| req-fedramp-20x-vdr-page-mrh-3 | Access Stated | Proposed | The heading names the fetch route and the authentication it needs. | |
+
 ### v0 Non-Goals
 ----
 RID: `req-fedramp-20x-vdr-nongoals`
@@ -458,17 +930,20 @@ Status: `Proposed`
 
 The plugin does not, in v0:
 
-- ship pages, panels or a layout; the Searches are the surface other pages read;
+- ship pages, panel types or a layout beyond the three report pages, which are configuration of core panels; the Searches are the surface other pages read;
 - mint findings, vulnerabilities, scanners or scan runs, or store a detection time (compliance_core owns them; Issue# 43 - compliance-core-tap);
-- store a date: the deadline Searches compute dates on read in the runner, and no node holds one;
+- store a deadline: the deadline Searches compute dates on read in the runner, and no node holds one (the report and finding-state nodes hold the instants they were generated and observed, never a deadline);
 - evaluate a finding that has no vulnerability edge, or a resolved one;
 - compute the exact deadline for an evaluation with any factor set; v0 shows the worst-case bound (`req-fedramp-20x-vdr-partial`);
-- store PAIN, an owner, an effective profile or a roll-up: the reach computes on read (`req-fedramp-20x-vdr-reach`) and a method plugin computes the level;
+- store PAIN as an evaluation, an owner, an effective profile or a roll-up: the reach computes on read (`req-fedramp-20x-vdr-reach`) and a method plugin computes the level; the one PAIN the plugin writes is the record of what a method returned and when (`req-fedramp-20x-vdr-finding-state`);
 - score a finding: the formula, weights and thresholds belong to a method plugin such as `stackarmor_vdr`;
 - invent a timeframe for PAIN N0 or N1 (`req-fedramp-20x-vdr-low-pain`);
 - represent the system's class as anything but the default input (`req-fedramp-20x-vdr-class`);
 - schedule or seed the coverage snapshot's Search or Schedule (the playground owns both; `req-fedramp-20x-vdr-coverage-snapshot`);
-- produce the per-period VDR report, grouping, false-positive or accepted-vulnerability records, detection cadence, or failures as vulnerabilities (the Backlog rows above).
+- group findings, evaluate false positives, check detection cadence, or treat failures as vulnerabilities (the Backlog rows above);
+- deliver a report document anywhere: transport to a trust center belongs to the consuming plugin (the first planned is `regscale`), and the emitter primitive to core's tap_cares (`req-tap-cares-v0-emitter`, Issue# 1357 - tap); this plugin only produces, validates, keeps and serves the documents (`req-fedramp-20x-vdr-fetch`);
+- sign documents, publish a public tier that withholds open reachable and exploitable findings, or emit VEX: the publication concerns of a method such as Aydlette's (its REQ-PUB-1, -3 and -4) belong to a publication pipeline, not to this export;
+- seed a Schedule or a report profile: both are the instance's (`req-fedramp-20x-vdr-generator`, `req-fedramp-20x-vdr-profile`).
 
 ## Model catalog
 
@@ -478,6 +953,9 @@ Design-time; superseded by the manifest once the owning requirement is `Implemen
 | --- | --- | --- | --- |
 | `vdr_evaluation` | `fedramp_20x_vdr__vdr_evaluation` | Judgement | A judgement by a party at a time, one per finding per scheme, kept apart from the scanner's observation. |
 | `vdr_timeframe` | `fedramp_20x_vdr__vdr_timeframe` | Reference data | One cell of a FedRAMP table, so the table is data with a cited source. |
+| `vdr_report_profile` | `fedramp_20x_vdr__vdr_report_profile` | Declaration | What a provider declares about how one offering reports (FedRAMP ID, package URI, class, start, scheme, method); a node because TAP has no plugin configuration and the facts deserve history. |
+| `vdr_finding_state` | `fedramp_20x_vdr__vdr_finding_state` | Observation | A change point in one finding's reported rating or disposition under one profile; the history methods do not keep. |
+| `vdr_report` | `fedramp_20x_vdr__vdr_report` | Format record | What one held report file is: kind, period, profile, schema; joined to the file by core's `FILE_CONTENTS`. |
 
 ## Edge types
 
@@ -485,6 +963,11 @@ Design-time; superseded by the manifest once the owning requirement is `Implemen
 | --- | --- | --- | --- |
 | `EVALUATES_COMPLIANCE_FINDING` | `vdr_evaluation` → `compliance_finding` | none | Which finding an evaluation judges. |
 | `CITES_FACTOR_EVIDENCE` | `vdr_evaluation` → `compliance_evidence` | `factor`, `basis`, `note` | The proof that lowers one factor; the existing finding-to-evidence edge cannot start at an evaluation. |
+| `RUNS_SEARCH` | `vdr_report_profile` → `search` | none | Which Search rates the profile's findings; an edge rather than an id column, so the method is visible on the graph and no hidden id map exists. |
+| `TRACKS_COMPLIANCE_FINDING` | `vdr_finding_state` → `compliance_finding` | none | Which finding a state describes. |
+| `APPLIES_REPORT_PROFILE` | `vdr_report` → `vdr_report_profile` | none | Which profile a report was generated under. |
+| `FOLLOWS_VDR_REPORT` | `vdr_report` → `vdr_report` | none | The previous report of the same profile and kind, so the period chain of VER-RPT-PER is on the graph and a gap or fork is a check. |
+| `FILE_CONTENTS` (core, `tap_files`) | `tap_file` → `vdr_report` | `sha256` | Declared by core, written by this plugin: the report node is the held file's format record. |
 
 ## Reference data
 
@@ -492,3 +975,7 @@ Design-time; superseded by the manifest once the owning requirement is `Implemen
 | --- | --- | --- |
 | `grift/timeframes.grift.json` | The 53 `vdr_timeframe` rows. | `import_plugin_grift` |
 | `data/evidence_basis.json` | The closed list of evidence bases, with a schema. | Loaded by the plugin |
+| `data/method_rows.schema.json` | The method rating contract (`req-fedramp-20x-vdr-rating`). | Loaded by the plugin |
+| `data/fedramp/*.json` | The three FedRAMP 2026-06-24 report schemas and their common definitions, vendored byte for byte with pinned digests. The licence of FedRAMP's schema files is confirmed before vendoring. | Loaded by the plugin |
+| `grift/searches.grift.json` | The `vdr-reports` and `vdr-report-markup` Search nodes. | `import_plugin_grift` |
+| `grift/pages.grift.json` | The three report pages and their panel configurations. | `import_plugin_grift` |
