@@ -253,7 +253,7 @@ class TestMigration:
 
 
 class TestUpgradeFromV01:
-    """The real upgrade path: a database at migration 0001 holding a v0.1.0 evaluation, migrated forward to 0002."""
+    """The real upgrade path: a database at migration 0001 holding a v0.1.0 evaluation, migrated forward to the latest."""
 
     @pytest.mark.spec("req-fedramp-20x-vdr-evaluation-9")
     def test_a_v01_evaluation_becomes_max_and_the_collector_adds_no_second(self, isolate_collector_registry: Any) -> None:
@@ -263,8 +263,14 @@ class TestUpgradeFromV01:
         app = "fedramp_20x_vdr"
         finding = _finding("old")
 
+        from tap_grid import spine_copies
+
         executor = MigrationExecutor(connection)
         executor.migrate([(app, "0001_initial")])  # back to the released schema: no scheme column
+        # A bare MigrationExecutor sends no post_migrate, so core's spine-copy triggers would still name the
+        # columns 0001 lacks (tap#1352). Re-install them, as `migrate` does: a table without the columns
+        # loses its trigger until it has them again.
+        spine_copies.install()
         try:
             old_apps = MigrationExecutor(connection).loader.project_state([(app, "0001_initial")]).apps
             Historic = old_apps.get_model(app, "VdrEvaluation")
@@ -280,7 +286,10 @@ class TestUpgradeFromV01:
                 rationale="written by v0.1.0",
             )
         finally:
-            MigrationExecutor(connection).migrate([(app, "0002_evaluation_scheme")])
+            # Forward to the latest migration, not only 0002: later ones (the spine copies) must be back too.
+            forward = MigrationExecutor(connection)
+            forward.migrate([node for node in forward.loader.graph.leaf_nodes() if node[0] == app])
+            spine_copies.install()
 
         migrated = get_model_class(EVALUATION).objects.get(entity_id=entity.pk)
         assert migrated.scheme == "max" and migrated.rationale == "written by v0.1.0"

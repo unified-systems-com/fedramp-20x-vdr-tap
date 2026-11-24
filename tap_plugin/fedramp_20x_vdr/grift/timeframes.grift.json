@@ -1,6 +1,11 @@
 {
   "metadata": {
-    "grift_version": "0"
+    "grift_version": "1",
+    "spine_version": 1,
+    "type_versions": {
+      "batch": 1,
+      "fedramp_20x_vdr__vdr_timeframe": 1
+    }
   },
   "_reserved": {},
   "batches": [
