@@ -21,6 +21,7 @@ from tap_plugin.fedramp_20x_vdr.tests.conftest import dimension_view
 
 from tap_grid.constraints import InvalidEdgeError
 from tap_grid.grift import grift_import
+from tap_grid.grift.upgrade import build_header
 from tap_grid.models import Edge, Entity
 from tap_grid.registry import get_model_class
 from tap_grid.services import create_edge, create_node
@@ -56,8 +57,7 @@ def _create(type_slug: str, payload: dict[str, Any]) -> Any:
 
 
 def _doc(nodes: list[dict[str, Any]], edges: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    return {
-        "metadata": {"grift_version": "0"},
+    document: dict[str, Any] = {
         "_reserved": {},
         "batches": [
             {
@@ -79,6 +79,8 @@ def _doc(nodes: list[dict[str, Any]], edges: list[dict[str, Any]] | None = None)
             }
         ],
     }
+    document["metadata"] = build_header(document)
+    return document
 
 
 def _ref_node(ref: str, entity_type: str, fields: dict[str, Any], name: str | None = None) -> dict[str, Any]:
