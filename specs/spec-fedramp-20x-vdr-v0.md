@@ -42,6 +42,7 @@ FedRAMP's rules ask a provider to evaluate each detected vulnerability and then 
 | 4 | Computed Deadlines | Deadlines and overdue flags are computed from first detection and the seeded rows, never stored. |
 | 5 | Additive Stages | Attaching evidence in a later stage fills fields; it adds no migration and rewrites no node. |
 | 6 | One Stored Document | Each report document is generated once, validated against FedRAMP's schema and kept; the page, the download and the API all serve those bytes, and no method's code is imported to make it. |
+| 7 | Stored Evaluations | Every run of an evaluation algorithm keeps its answer for every finding it evaluated, so the current and every earlier evaluation can be read back, and the algorithm never writes them itself. |
 
 ## Requirements
 
@@ -58,6 +59,13 @@ FedRAMP's rules ask a provider to evaluate each detected vulnerability and then 
 | req-fedramp-20x-vdr-deadlines | [Deadlines](#deadlines) | Implemented | Evaluation deadline, remediation deadline, overdue and acceptance flags as Searches. Needs `first_detected_at` (Issue# 43 - compliance-core-tap, v0.8.4); the runner does the date arithmetic. |
 | req-fedramp-20x-vdr-incidents | [Reportable Incidents](#reportable-incidents) | Implemented | The internet-reachable and non-internet-reachable incident rules as Searches. Ship condition: each is one Search that applies the evidence test itself (`-incidents-6`). |
 | req-fedramp-20x-vdr-summary | [Summary Counts](#summary-counts) | Implemented | The `vdr-summary` `module` Search runner: the counts of the deadline and incident Searches for one scheme, for cards and charts. |
+| req-fedramp-20x-vdr-storage | [Stored Evaluations](#stored-evaluations) | Proposed | Every algorithm run stores its evaluations; the shape (run node, per-run results keyed on `run_id`, house trace), what it supersedes, and what changes for the export. |
+| req-fedramp-20x-vdr-run | [Evaluation Run](#evaluation-run) | Proposed | `vdr_evaluation_run`, keyless, one per algorithm run: algorithm, start, finish, complete, counts. No edges to its results. |
+| req-fedramp-20x-vdr-result | [Per-Run Evaluation](#per-run-evaluation) | Proposed | `vdr_evaluation`, one per evaluated finding per run, keyed `(finding_source, finding_source_key, algorithm, run_id)`, carrying the consolidated LEV, IRV and PAIN; unknown is omitted; no edge to the finding. |
+| req-fedramp-20x-vdr-method | [Method Registration](#method-registration) | Proposed | An algorithm plugin registers its algorithm and returns rows; it never writes `vdr_evaluation`. `max` is registered by this plugin the same way. |
+| req-fedramp-20x-vdr-evaluate | [Evaluation Run Collector](#evaluation-run-collector) | Proposed | The `vdr_evaluate` collector runs every registered algorithm, one run each, and writes the run and its results; daily by default. |
+| req-fedramp-20x-vdr-current | [Current And Previous Evaluation](#current-and-previous-evaluation) | Proposed | Derived from run time over complete runs only; no stored pointer. |
+| req-fedramp-20x-vdr-trace | [House Trace](#house-trace) | Proposed | One wildcard `EXPLAINED_BY_VDR_TRACE` edge from a `vdr_evaluation` to the algorithm's own house-style trace nodes. |
 | req-fedramp-20x-vdr-profile | [Report Profile](#report-profile) | Proposed | The node that declares an offering's FedRAMP ID, package URI, class, reporting start, evaluation scheme and rating method (`RUNS_SEARCH`). |
 | req-fedramp-20x-vdr-rating | [Method Rating Contract](#method-rating-contract) | Proposed | The row shape a method's Search returns (`finding_id`, `pain`, `lev`, `irv`, `evaluated_at`), as a JSON Schema; the export imports no method. |
 | req-fedramp-20x-vdr-finding-state | [Finding State History](#finding-state-history) | Proposed | `vdr_finding_state`, written when a finding's rating or disposition changes, so reports can state history and reductions. |
@@ -465,6 +473,242 @@ Inputs: `view` (`counts`, the default, or `by_view`), `now`, `fedramp_class` (de
 | req-fedramp-20x-vdr-summary-3 | Zero Is Stated | Implemented | On a grid with no evaluations every count is 0, not missing. | |
 | req-fedramp-20x-vdr-summary-4 | Bad Input Refused | Implemented | An unknown input, a `view` other than the two and a class other than a to d are refused with a `ValueError`. | |
 | req-fedramp-20x-vdr-summary-5 | Registered, Read Only | Implemented | The runner is registered as `tap_plugin.fedramp_20x_vdr.searches.clocks:vdr-summary` and writes nothing. | |
+
+### Stored Evaluations
+----
+RID: `req-fedramp-20x-vdr-storage`
+
+Status: `Proposed`
+
+Today LEV, IRV and PAIN are computed when they are read: method Searches compute PAIN on read, and the VDR-max evaluation is one persistent node per finding that nothing re-dates. Nothing records what an algorithm said yesterday, so a report cannot state history and two algorithms cannot be compared over time. From this requirement on, every run of an evaluation algorithm stores its answer (owner ruling 2026-11-25).
+
+**The shape.**
+
+- A **run** is one execution of one algorithm: a `vdr_evaluation_run` node holding the run's information, with no edges to its results (`req-fedramp-20x-vdr-run`).
+- Each run mints one **`vdr_evaluation`** per finding it evaluated, carrying the consolidated LEV, IRV and PAIN, keyed `(finding_source, finding_source_key, algorithm, run_id)` (`req-fedramp-20x-vdr-result`). `run_id` is the run node's entity id, a plain indexed UUID written once: not a foreign key, not a dimension, not an edge. `algorithm` is a field, not a dimension.
+- An algorithm plugin **registers** its algorithm and returns rows; this plugin writes the run, the results and any trace (`req-fedramp-20x-vdr-method`, `req-fedramp-20x-vdr-evaluate`).
+- **Current** and **previous** are derived from run time over complete runs only; nothing stores a pointer, and there is no `SUPERSEDES` edge (`req-fedramp-20x-vdr-current`).
+- An algorithm's own process detail is kept in its **house-style** nodes, owned by the method plugin, joined by one wildcard `EXPLAINED_BY_VDR_TRACE` edge (`req-fedramp-20x-vdr-trace`). A fact about the environment that a second algorithm would read about the same asset gets a shared generic type instead.
+- A **persistent** node, the finding above all, never carries `run_id`. Which run last named a finding is core's `last_observed_batch_id` (`req-grid-history-reobservation`); every run that evaluated a finding is the set of results keyed on that finding.
+
+This is the run rule of the TAP best-practices guide (Identity and observation, "Runs: a run node, plus a `run_id` field"): thousands of result edges to one run node would make a super-node, and a dimension gathers types from many plugins, which a run's output in one table is not.
+
+**What it supersedes, on adoption.** These existing rows are rewritten in the same change that builds this requirement; they are listed here so the build cannot miss one.
+
+| Existing | Change |
+| --- | --- |
+| `req-fedramp-20x-vdr-evaluation` `-1`, `-4`, `-5`, `-7`, `-8`, `-9` | The key becomes `req-fedramp-20x-vdr-result-1`; the `scheme` column becomes `algorithm`; the `EVALUATES_COMPLIANCE_FINDING` edge and its checks go; `-9` (existing rows become `max`) is not carried: the grid is reloaded, no data migration (no field deployment exists). |
+| `req-fedramp-20x-vdr-evaluation-6` | PAIN is refused on the person-set factors only; a result carries the algorithm's PAIN (`req-fedramp-20x-vdr-result-5`). |
+| `req-fedramp-20x-vdr-evaluation-2`, `req-fedramp-20x-vdr-evidence` | The person-set, evidence-backed factors and `CITES_FACTOR_EVIDENCE` need a persistent home that is not a per-run result (open question 1). |
+| `req-fedramp-20x-vdr-collector` (all) | The VDR-max collector is replaced by the `max` algorithm run by `vdr_evaluate` (`req-fedramp-20x-vdr-method-5`). |
+| Default dimension `vdr.scheme`; `req-fedramp-20x-vdr-collector-8`; the `vdr.scheme` node in `grift/dimension.grift.json` | Retired: no dimension names the algorithm. |
+| `req-fedramp-20x-vdr-effective-8`, `req-fedramp-20x-vdr-pain-4`, `-9`, `req-fedramp-20x-vdr-deadlines`, `-incidents`, `-summary` | The `scheme` input becomes `algorithm`, and the evaluation read is the current stored result (open question 2), not a node reached by `EVALUATES_COMPLIANCE_FINDING`. |
+
+**What changes for the export.** The export reads the current evaluation of the profile's algorithm from storage through `current_evaluations` (`req-fedramp-20x-vdr-current`) and runs no method Search. Touched:
+
+| Export requirement | Change |
+| --- | --- |
+| `req-fedramp-20x-vdr-profile` (`-2`, `-4`, `-5`) | `evaluation_scheme` becomes `algorithm`, a registered algorithm id; `RUNS_SEARCH` and `method_inputs` go (open question 4). A profile whose algorithm has no complete run generates documents with no rating, as `-5` states today for no method. |
+| `req-fedramp-20x-vdr-rating` (`-1`, `-3`, `-5`, `-6`) | The row shape stays the contract, now of `req-fedramp-20x-vdr-method`; validation, the fail-safe reduction and the stranger count move to the run collector. `-5` (truncated Search result) goes: no Search is read. `-2` and `-4` stay. |
+| `req-fedramp-20x-vdr-finding-state` (all) | Superseded: the per-run results are the history. `vdr_finding_state` and `TRACKS_COMPLIANCE_FINDING` are not built. |
+| `req-fedramp-20x-vdr-mapping` | Findings covered: those with a current result of the profile's algorithm. `isLikelyExploitable`, `isInternetReachable`, `currentRating`, `potentialAgencyImpact` from the current result (naming the algorithm, not a Search); `evaluationCompletedAt` from its `evaluated_at`, else the run's `started_at`; `painReductionEvents` from the finding's results over complete runs, `reducedAt` the run's `started_at`. `-8` is restated over results. |
+| `req-fedramp-20x-vdr-report` | `evaluation_scheme` and `method_search_id` become `algorithm` and `evaluation_run_id`, the run whose results the document reports. |
+| `req-fedramp-20x-vdr-generator` (`-3`, `-5`) | Steps 1, 2 and 5 become one read of current evaluations; the generator writes no state. `-3`'s invalid-row case moves to `req-fedramp-20x-vdr-evaluate-3`. |
+| `req-fedramp-20x-vdr-page-mrh` | Reduction times are the start of the run that first returned the lower rating. |
+| `req-fedramp-20x-vdr-nongoals` | Amended below: this plugin seeds the daily evaluation Schedule, and writes PAIN on results. |
+
+**Open for the owner.** Numbered as in the review that carries this draft: (1) where the person-set, evidence-backed factors live; (2) whether the deadline and incident Searches read stored results; (3) whether the generator's run is one GRIFT batch however large the cohort; (4) where algorithm inputs such as the class come from; (5) retention of results.
+
+#### Acceptance Criteria
+
+| ACID | Title | Status | Description | Notes |
+| --- | --- | :---: | --- | --- |
+| req-fedramp-20x-vdr-storage-1 | History Kept | Proposed | After two complete runs of one algorithm over one finding, two `vdr_evaluation` nodes exist for it, and the first is unchanged (same `version`, same values). | |
+| req-fedramp-20x-vdr-storage-2 | No Algorithm Dimension | Proposed | No node or edge this plugin writes carries a dimension naming the algorithm; every Search and function filters on the `algorithm` field. | |
+| req-fedramp-20x-vdr-storage-3 | Persistent Nodes Carry No Run | Proposed | A run's batches contain only `vdr_evaluation_run`, `vdr_evaluation`, trace nodes and `EXPLAINED_BY_VDR_TRACE` edges; no finding or other persistent node is written, so none gains a `run_id`. | |
+| req-fedramp-20x-vdr-storage-4 | No Invented Limits | Proposed | The run path declares no count cap, batch size, timeout, retry count or truncation; every finding the algorithm returns is stored. | A review item. A limit the build finds it needs is raised with the owner first, with what breaks either way. |
+
+### Evaluation Run
+----
+RID: `req-fedramp-20x-vdr-run`
+
+Status: `Proposed`
+
+One node per execution of one algorithm. It says which algorithm ran, when, whether it finished and completed, and what it counted. It has no edges to its results: they name it by `run_id`.
+
+#### Implementation
+
+Entity type `fedramp_20x_vdr__vdr_evaluation_run`. `NATURAL_KEY = KEYLESS`, reason "a run: one execution of an evaluation algorithm, not an object observed". `EVENT_TIME` is `started_at`. Default dimensions `{"fedramp.rule": "vdr"}`. Written only by `vdr_evaluate`.
+
+| field | meaning |
+| --- | --- |
+| `algorithm` | Required. The registered algorithm id (`req-fedramp-20x-vdr-method`); 1 to 64 characters, the length the identity column has today. |
+| `started_at` | Required, `format: date-time`. The run time from which current and previous are derived. |
+| `finished_at` | `format: date-time`, or `null` while running or when the run died without recording an end. |
+| `complete` | Boolean, `false` until the batch carrying every result is accepted. |
+| `rows_returned`, `results_written`, `findings_unnamed`, `rows_unmatched` | Integers, or `null` until counted: rows the algorithm returned; results stored; findings skipped for an empty `source` or `source_key`; rows whose `finding_id` names no finding. |
+| `failure` | Free text, or `null`. Why the run did not complete, when the base could record it. |
+
+The entity id is a UUIDv7 minted by the collector before the first write, so it can be stamped as `run_id` on every result in the same pass; the run node is then re-sent by that entity id, never found by a key.
+
+#### Acceptance Criteria
+
+| ACID | Title | Status | Description | Notes |
+| --- | --- | :---: | --- | --- |
+| req-fedramp-20x-vdr-run-1 | Keyless, Addressed By Id | Proposed | `vdr_evaluation_run` declares `KEYLESS` with its reason; a run node sent twice under one entity id is one node with the second values. | The second half is a build check of GRIFT's handling of a keyless node re-sent by `entity_id`. |
+| req-fedramp-20x-vdr-run-2 | Fields Checked | Proposed | A write without `algorithm` or `started_at`, or with a negative count, is refused; unset counts, `finished_at` and `failure` are `null`, never `0` or `""`. | |
+| req-fedramp-20x-vdr-run-3 | No Edges To Results | Proposed | No edge type in the manifest joins `vdr_evaluation_run` to `vdr_evaluation`, and no run writes one. | |
+| req-fedramp-20x-vdr-run-4 | Complete Means Every Result | Proposed | `complete` is `true` only through the batch that also carries every result, `finished_at` and the counts; a run whose results batch is rejected or never sent stays `false`. | |
+| req-fedramp-20x-vdr-run-5 | Counts Match | Proposed | For a complete run, `results_written` equals the number of `vdr_evaluation` nodes with its `run_id`, and the other counts equal what the run skipped. | |
+
+### Per-Run Evaluation
+----
+RID: `req-fedramp-20x-vdr-result`
+
+Status: `Proposed`
+
+What one algorithm concluded about one finding in one run. It is minted by the run and never changed.
+
+#### Implementation
+
+Entity type `fedramp_20x_vdr__vdr_evaluation`. `NATURAL_KEY = ("finding_source", "finding_source_key", "algorithm", "run_id")`, all plain fields. `EVENT_TIME` is `evaluated_at`. Default dimensions `{"fedramp.rule": "vdr"}`. Written only by `vdr_evaluate`.
+
+| field | meaning |
+| --- | --- |
+| `finding_source`, `finding_source_key` | The finding's `source` and `source_key`, verbatim. The finding is found by these, not by an edge. |
+| `algorithm` | The registered algorithm id, as on the run. |
+| `run_id` | UUID, indexed, required. The entity id of the `vdr_evaluation_run` that minted this result. Not a foreign key and not a dimension. |
+| `likely_exploitable`, `internet_reachable` | Boolean. Omitted when the algorithm did not know. |
+| `pain` | `N0` to `N5`. Omitted when the algorithm did not rate. |
+| `evaluated_at` | `format: date-time`, or omitted: when the algorithm says the evaluation was made, if it knows. |
+
+**Consolidated.** Several rows for one finding in one run are reduced to one result by the fail-safe reduction of `req-fedramp-20x-vdr-rating` (highest PAIN, any unknown makes it unknown; LEV and IRV true if any row is true, false only if every row is false).
+
+**Unknown is omitted.** An unknown rating is left out of the record. No sentinel is written: not `N5`, not `false`, not a string. The column reads empty, and every consumer reads that as "not rated": the deadline as the worst case (`req-fedramp-20x-vdr-effective`), the documents by omitting the field (`req-fedramp-20x-vdr-mapping-3`). A finding evaluated with nothing known still gets a result, so the history shows it was evaluated.
+
+#### Acceptance Criteria
+
+| ACID | Title | Status | Description | Notes |
+| --- | --- | :---: | --- | --- |
+| req-fedramp-20x-vdr-result-1 | Keyed By Finding, Algorithm And Run | Proposed | `vdr_evaluation` declares the key above; one finding in two runs is two nodes; one finding in one run of each of two algorithms is two nodes. | |
+| req-fedramp-20x-vdr-result-2 | Run Id Is A Plain Id | Proposed | `run_id` is a required, indexed UUID column, equal to the entity id of an existing `vdr_evaluation_run` of the same `algorithm`; a check reports any result whose `run_id` names no run or a run of another algorithm. | Detection after the fact: there are no foreign keys between typed tables. |
+| req-fedramp-20x-vdr-result-3 | Written Once | Proposed | No code path sends a `vdr_evaluation` whose key exists or deletes one. | |
+| req-fedramp-20x-vdr-result-4 | Unknown Omitted | Proposed | A row with `pain`, `lev` or `irv` null yields a record without that field, which reads back empty; a row with all three null still yields a result. | |
+| req-fedramp-20x-vdr-result-5 | Values Checked | Proposed | `pain` outside `N0` to `N5`, a non-boolean factor or a non-date-time `evaluated_at` is refused. | PAIN is allowed here: it is the algorithm's output, not a person-set factor. |
+| req-fedramp-20x-vdr-result-6 | No Finding Edge | Proposed | `vdr_evaluation` declares no edge to `compliance_finding`; its only outbound edge type is `EXPLAINED_BY_VDR_TRACE`. | |
+| req-fedramp-20x-vdr-result-7 | Key Names A Finding | Proposed | A check reports any result whose `finding_source` and `finding_source_key` match no `compliance_finding`. | |
+| req-fedramp-20x-vdr-result-8 | Consolidated | Proposed | Rows `N3` and `N4` for one finding in one run give one result with `N4`; `N3` and null give a result with no `pain`. | The reduction of `req-fedramp-20x-vdr-rating-3`. |
+
+### Method Registration
+----
+RID: `req-fedramp-20x-vdr-method`
+
+Status: `Proposed`
+
+An algorithm plugin says what its algorithm is and how to run it; it does not write results. This keeps one writer for `vdr_evaluation`, one shape for every algorithm's results, and lets several algorithms run over the same grid and be compared.
+
+#### Implementation
+
+`tap_plugin/fedramp_20x_vdr/algorithms.py`:
+
+- `register_algorithm(*, algorithm, evaluate, name, description)`, called from the method plugin's `ready()`. `algorithm` is the id stored on runs and results, an open list (convention: the house name, `max`, `stackarmor`, `aydlette`, `coalfire`). A second registration of one id is refused, naming both registrants.
+- `evaluate(run: AlgorithmRun) -> AlgorithmResult`. `AlgorithmRun` carries `run_id`, `algorithm`, `started_at` and `db_alias`. `AlgorithmResult` carries `rows`, each valid against `data/method_rows.schema.json` (the contract of `req-fedramp-20x-vdr-rating`: `finding_id`, `pain`, `lev`, `irv`, `evaluated_at`) plus an optional list of trace refs, and `trace`, the GRIFT node records of the method's house types (`req-fedramp-20x-vdr-trace`).
+- `max` is registered by this plugin through the same function. Its rows: every open finding with a `CONCERNS_COMPLIANCE_VULNERABILITY` edge, `lev` and `irv` from `backed_factors` (a `None` stays null, so it is omitted), `pain` null.
+
+The algorithm reads the grid as it likes through `read_scope` with the given `db_alias`; it writes nothing.
+
+#### Acceptance Criteria
+
+| ACID | Title | Status | Description | Notes |
+| --- | --- | :---: | --- | --- |
+| req-fedramp-20x-vdr-method-1 | Registered Once | Proposed | An algorithm registered in `ready()` is run by the next collector run; registering the same id twice raises, naming both. | |
+| req-fedramp-20x-vdr-method-2 | Returns, Does Not Write | Proposed | A check reports any `vdr_evaluation` or `vdr_evaluation_run` whose `last_changed_batch_id` names a batch not produced by `vdr_evaluate`. | A method plugin that writes its own results is non-conformant. |
+| req-fedramp-20x-vdr-method-3 | Rows Validated | Proposed | A row that fails `data/method_rows.schema.json` fails that algorithm's run, with `failure` naming the algorithm, the row and the column; none of its results is stored. | Was `req-fedramp-20x-vdr-rating-1`. |
+| req-fedramp-20x-vdr-method-4 | Trace Types Are The Method's | Proposed | A trace record whose type is owned by `fedramp_20x_vdr`, or whose `run_id` is not the run's, fails the run. | Results cannot enter through the trace. |
+| req-fedramp-20x-vdr-method-5 | max Is An Algorithm | Proposed | With no method plugin installed, one run stores a `max` result for every open finding with a vulnerability edge; with an evidence-backed `internet_reachable` of false the result carries `false`; otherwise every rating is omitted. | Replaces the VDR-max collector. |
+| req-fedramp-20x-vdr-method-6 | No Method Imported | Proposed | No module of this plugin imports a method plugin. | As `req-fedramp-20x-vdr-rating-2`. |
+
+### Evaluation Run Collector
+----
+RID: `req-fedramp-20x-vdr-evaluate`
+
+Status: `Proposed`
+
+The one writer of runs and results. A Schedule fires a collector (`req-tap-cares-scheduler-scope-1`), so the runner is a derived collector.
+
+#### Implementation
+
+`tap_plugin/fedramp_20x_vdr/collectors/vdr_evaluate/collector.py`, registered as `vdr_evaluate` under scope `fedramp_20x_vdr`. Each collector run, for every registered algorithm in id order, independently:
+
+1. Mint the run's entity id; submit the run node (`complete` false, `started_at` now) as one GRIFT batch.
+2. Call `evaluate`. Validate every row; resolve each `finding_id` to the finding's `source` and `source_key` through `read_scope`; skip and count the unnamed and the unmatched; consolidate per finding.
+3. Submit one GRIFT batch: every result, every trace node, every `EXPLAINED_BY_VDR_TRACE` edge, and the run node again with `finished_at`, the counts and `complete` true.
+
+An algorithm that raises, or returns an invalid row, gets its run node re-sent with `finished_at` and `failure`, `complete` false; the other algorithms proceed, and the collector run fails naming each failed algorithm. Results carry fresh keys, so step 3 only creates.
+
+**Daily by default.** The plugin ships one `Schedule` in `grift/schedules.grift.json`, cron `0 0 * * *` (daily, UTC), targeting this collector's `Collector` node. An instance may change its cron. The on-demand path is the same collector run from the Administrivia panel.
+
+No credential and no external call.
+
+#### Acceptance Criteria
+
+| ACID | Title | Status | Description | Notes |
+| --- | --- | :---: | --- | --- |
+| req-fedramp-20x-vdr-evaluate-1 | Registered | Proposed | `vdr_evaluate` is registered under scope `fedramp_20x_vdr` at `ready()` with a name and description, and reconciles to one `Collector` node. | |
+| req-fedramp-20x-vdr-evaluate-2 | One Run Per Algorithm | Proposed | With `max` and one more algorithm registered, a collector run writes two `vdr_evaluation_run` nodes, one per algorithm. | |
+| req-fedramp-20x-vdr-evaluate-3 | Failures Stay Local | Proposed | With algorithm A raising, A's run has `complete` false, `failure` set and no results; B's run completes; the collector run is failed naming A. | |
+| req-fedramp-20x-vdr-evaluate-4 | Two Batches | Proposed | The run node is accepted before `evaluate` is called; results, traces, trace edges and the completed run node are accepted together or not at all. | |
+| req-fedramp-20x-vdr-evaluate-5 | Daily By Default | Proposed | The plugin's seed holds one `Schedule` with cron `0 0 * * *` targeting `vdr_evaluate`. | |
+| req-fedramp-20x-vdr-evaluate-6 | On Demand Is The Same Run | Proposed | A run from the Administrivia panel writes the same kinds of output, and its job has `manual_run` true. | |
+
+### Current And Previous Evaluation
+----
+RID: `req-fedramp-20x-vdr-current`
+
+Status: `Proposed`
+
+Which result is current is a reading of the runs, never a stored mark. A run that did not complete is never read.
+
+#### Implementation
+
+`tap_plugin.fedramp_20x_vdr.evaluations.current_evaluations(algorithm, *, findings=None, as_of=None, db_alias)` returns, for each finding key `(source, source_key)` (all, or those in `findings`), `current` and `previous`, each a result with its `run_id` and the run's `started_at`, or `None`.
+
+- The complete runs of the algorithm are ordered by `started_at`, ties by run entity id; with `as_of`, runs that started after it are ignored.
+- `current` is the finding's result in the latest complete run. A finding with no result in that run has no current evaluation.
+- `previous` is the finding's result in the latest earlier complete run that has one.
+
+Reads go through `read_scope`. It writes nothing.
+
+#### Acceptance Criteria
+
+| ACID | Title | Status | Description | Notes |
+| --- | --- | :---: | --- | --- |
+| req-fedramp-20x-vdr-current-1 | Complete Runs Only | Proposed | A result whose run has `complete` false is neither current nor previous, even when its run is the newest. | |
+| req-fedramp-20x-vdr-current-2 | Latest Complete Run | Proposed | With complete runs R1 then R2 both evaluating F, current is R2's result and previous R1's; with F absent from R2, F has no current. | |
+| req-fedramp-20x-vdr-current-3 | As Of | Proposed | With `as_of` between R1 and R2, current is R1's result. | |
+| req-fedramp-20x-vdr-current-4 | One Algorithm | Proposed | A newer complete run of another algorithm changes nothing. | |
+| req-fedramp-20x-vdr-current-5 | Nothing Stored | Proposed | No field, dimension or edge marks a result current or superseded, and no `SUPERSEDES` edge type exists. | |
+
+### House Trace
+----
+RID: `req-fedramp-20x-vdr-trace`
+
+Status: `Proposed`
+
+An algorithm often has more to say than LEV, IRV and PAIN: the criticality it assigned, the gates it passed. That is the algorithm's house style, so it stays in the method plugin, named for the house (for example `coalfire_criticality`, not `criticality`). A fact about the environment that a second algorithm would read about the same asset is not house style and gets a shared generic type in this plugin or in core.
+
+#### Implementation
+
+`EXPLAINED_BY_VDR_TRACE` runs from a `vdr_evaluation` to any node: the edge definition names the source and omits `targets` (a wildcard side, `spec-grid-edge.md`). Plain identity, default dimension. Trace nodes are minted per run, so each carries `run_id` in its key, and they are written by `vdr_evaluate` in the run's results batch (`req-fedramp-20x-vdr-evaluate`). This plugin declares no trace node type.
+
+#### Acceptance Criteria
+
+| ACID | Title | Status | Description | Notes |
+| --- | --- | :---: | --- | --- |
+| req-fedramp-20x-vdr-trace-1 | Wildcard Target | Proposed | The edge definition declares `sources` `["fedramp_20x_vdr__vdr_evaluation"]` and no `targets`. | |
+| req-fedramp-20x-vdr-trace-2 | Trace Is Per Run | Proposed | Every node an `EXPLAINED_BY_VDR_TRACE` edge points at carries the `run_id` of the result it explains. | |
+| req-fedramp-20x-vdr-trace-3 | Optional | Proposed | An algorithm that returns no trace has its results stored with no trace edge. | |
+| req-fedramp-20x-vdr-trace-4 | House Types Stay Home | Proposed | This plugin's manifest declares no trace node type; a trace type a second algorithm would read about the same asset is moved to a shared generic type. | The second half is a review item. |
 
 ### Report Profile
 ----
@@ -935,7 +1179,7 @@ The plugin does not, in v0:
 - store a deadline: the deadline Searches compute dates on read in the runner, and no node holds one (the report and finding-state nodes hold the instants they were generated and observed, never a deadline);
 - evaluate a finding that has no vulnerability edge, or a resolved one;
 - compute the exact deadline for an evaluation with any factor set; v0 shows the worst-case bound (`req-fedramp-20x-vdr-partial`);
-- store PAIN as an evaluation, an owner, an effective profile or a roll-up: the reach computes on read (`req-fedramp-20x-vdr-reach`) and a method plugin computes the level; the one PAIN the plugin writes is the record of what a method returned and when (`req-fedramp-20x-vdr-finding-state`);
+- store PAIN as an evaluation, an owner, an effective profile or a roll-up: the reach computes on read (`req-fedramp-20x-vdr-reach`) and a method plugin computes the level; the one PAIN the plugin writes is an algorithm's output on a per-run `vdr_evaluation` (`req-fedramp-20x-vdr-result`);
 - score a finding: the formula, weights and thresholds belong to a method plugin such as `stackarmor_vdr`;
 - invent a timeframe for PAIN N0 or N1 (`req-fedramp-20x-vdr-low-pain`);
 - represent the system's class as anything but the default input (`req-fedramp-20x-vdr-class`);
@@ -943,7 +1187,7 @@ The plugin does not, in v0:
 - group findings, evaluate false positives, check detection cadence, or treat failures as vulnerabilities (the Backlog rows above);
 - deliver a report document anywhere: transport to a trust center belongs to the consuming plugin (the first planned is `regscale`), and the emitter primitive to core's tap_cares (`req-tap-cares-v0-emitter`, Issue# 1357 - tap); this plugin only produces, validates, keeps and serves the documents (`req-fedramp-20x-vdr-fetch`);
 - sign documents, publish a public tier that withholds open reachable and exploitable findings, or emit VEX: the publication concerns of a method such as Aydlette's (its REQ-PUB-1, -3 and -4) belong to a publication pipeline, not to this export;
-- seed a Schedule or a report profile: both are the instance's (`req-fedramp-20x-vdr-generator`, `req-fedramp-20x-vdr-profile`).
+- seed a report profile or the generator's Schedule: both are the instance's (`req-fedramp-20x-vdr-generator`, `req-fedramp-20x-vdr-profile`). The one Schedule it seeds is the daily evaluation run (`req-fedramp-20x-vdr-evaluate-5`).
 
 ## Model catalog
 
@@ -952,19 +1196,22 @@ Design-time; superseded by the manifest once the owning requirement is `Implemen
 | Model | Entity type | Category | Rationale |
 | --- | --- | --- | --- |
 | `vdr_evaluation` | `fedramp_20x_vdr__vdr_evaluation` | Judgement | A judgement by a party at a time, one per finding per scheme, kept apart from the scanner's observation. |
+| `vdr_evaluation` (from `req-fedramp-20x-vdr-result`) | `fedramp_20x_vdr__vdr_evaluation` | Judgement, per run | One algorithm's answer for one finding in one run, keyed on `run_id`; replaces the row above on adoption. |
+| `vdr_evaluation_run` | `fedramp_20x_vdr__vdr_evaluation_run` | Run | One execution of one algorithm; keyless; no edges to its results. |
 | `vdr_timeframe` | `fedramp_20x_vdr__vdr_timeframe` | Reference data | One cell of a FedRAMP table, so the table is data with a cited source. |
 | `vdr_report_profile` | `fedramp_20x_vdr__vdr_report_profile` | Declaration | What a provider declares about how one offering reports (FedRAMP ID, package URI, class, start, scheme, method); a node because TAP has no plugin configuration and the facts deserve history. |
-| `vdr_finding_state` | `fedramp_20x_vdr__vdr_finding_state` | Observation | A change point in one finding's reported rating or disposition under one profile; the history methods do not keep. |
+| `vdr_finding_state` | `fedramp_20x_vdr__vdr_finding_state` | Observation | A change point in one finding's reported rating or disposition under one profile; the history methods do not keep. Not built if `req-fedramp-20x-vdr-storage` is adopted: the per-run results are the history. |
 | `vdr_report` | `fedramp_20x_vdr__vdr_report` | Format record | What one held report file is: kind, period, profile, schema; joined to the file by core's `FILE_CONTENTS`. |
 
 ## Edge types
 
 | Edge | From → To | Properties | Rationale |
 | --- | --- | --- | --- |
-| `EVALUATES_COMPLIANCE_FINDING` | `vdr_evaluation` → `compliance_finding` | none | Which finding an evaluation judges. |
+| `EVALUATES_COMPLIANCE_FINDING` | `vdr_evaluation` → `compliance_finding` | none | Which finding an evaluation judges. Retired on adoption of `req-fedramp-20x-vdr-result`: a per-run result names its finding by key. |
+| `EXPLAINED_BY_VDR_TRACE` | `vdr_evaluation` → any | none | A result's house-style trace in the method plugin; wildcard target so the base names no house type (`req-fedramp-20x-vdr-trace`). |
 | `CITES_FACTOR_EVIDENCE` | `vdr_evaluation` → `compliance_evidence` | `factor`, `basis`, `note` | The proof that lowers one factor; the existing finding-to-evidence edge cannot start at an evaluation. |
 | `RUNS_SEARCH` | `vdr_report_profile` → `search` | none | Which Search rates the profile's findings; an edge rather than an id column, so the method is visible on the graph and no hidden id map exists. |
-| `TRACKS_COMPLIANCE_FINDING` | `vdr_finding_state` → `compliance_finding` | none | Which finding a state describes. |
+| `TRACKS_COMPLIANCE_FINDING` | `vdr_finding_state` → `compliance_finding` | none | Which finding a state describes. Not built with `vdr_finding_state`. |
 | `APPLIES_REPORT_PROFILE` | `vdr_report` → `vdr_report_profile` | none | Which profile a report was generated under. |
 | `FOLLOWS_VDR_REPORT` | `vdr_report` → `vdr_report` | none | The previous report of the same profile and kind, so the period chain of VER-RPT-PER is on the graph and a gap or fork is a check. |
 | `FILE_CONTENTS` (core, `tap_files`) | `tap_file` → `vdr_report` | `sha256` | Declared by core, written by this plugin: the report node is the held file's format record. |
@@ -977,5 +1224,6 @@ Design-time; superseded by the manifest once the owning requirement is `Implemen
 | `data/evidence_basis.json` | The closed list of evidence bases, with a schema. | Loaded by the plugin |
 | `data/method_rows.schema.json` | The method rating contract (`req-fedramp-20x-vdr-rating`). | Loaded by the plugin |
 | `data/fedramp/*.json` | The three FedRAMP 2026-06-24 report schemas and their common definitions, vendored byte for byte with pinned digests. The licence of FedRAMP's schema files is confirmed before vendoring. | Loaded by the plugin |
+| `grift/schedules.grift.json` | The daily `Schedule` for `vdr_evaluate` (`req-fedramp-20x-vdr-evaluate-5`). | `import_plugin_grift` |
 | `grift/searches.grift.json` | The `vdr-reports` and `vdr-report-markup` Search nodes. | `import_plugin_grift` |
 | `grift/pages.grift.json` | The three report pages and their panel configurations. | `import_plugin_grift` |
