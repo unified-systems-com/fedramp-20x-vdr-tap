@@ -24,6 +24,7 @@ import uuid
 from typing import Any
 
 from tap_cares.collectors import CollectorBase
+from tap_grid.grift.upgrade import build_header
 from tap_grid.gryphon.executor import execute_gryphon_raw
 
 FINDING_TYPE = "compliance_core__compliance_finding"
@@ -232,8 +233,7 @@ class VdrMaxCollector(CollectorBase):
                     },
                 }
             )
-        return {
-            "metadata": {"grift_version": "0"},
+        document: dict[str, Any] = {
             "_reserved": {},
             "batches": [
                 {
@@ -259,3 +259,7 @@ class VdrMaxCollector(CollectorBase):
                 }
             ],
         }
+        # Format "1" header: the spine version and every carried type's version, read from this
+        # grid's catalog once the batch is complete. Core refuses format "0" documents from 0.5.0.
+        document["metadata"] = build_header(document)
+        return document

@@ -21,6 +21,7 @@ from tap.pytest_harness import isolated_registry
 from tap_cares.models import CollectionJobStatus, Collector
 from tap_cares.registry import collector_registry, reconcile_collector_nodes, register_collector
 from tap_cares.services import run_collection
+from tap_grid.grift.upgrade import build_header
 from tap_grid.models import Edge, Entity
 from tap_grid.registry import get_model_class
 from tap_grid.services import create_edge, create_node
@@ -296,15 +297,23 @@ class TestWriteSurface:
     def test_it_submits_one_batch_and_does_not_override_the_abort_default(
         self, isolate_collector_registry: Any, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """req-fedramp-20x-vdr-collector-5: one GRIFT batch through submit_grift, abort-on-rejection kept."""
+        """req-fedramp-20x-vdr-collector-5: one GRIFT batch through submit_grift, abort-on-rejection kept,
+        under the format "1" header core's build_header states for it."""
         _finding("a")
         calls: list[dict[str, Any]] = []
         original = VdrMaxCollector.submit_grift
 
         def _spy(self: Any, document: Any, **kwargs: Any) -> Any:
-            calls.append({"batches": len(document["batches"]), "kwargs": kwargs})
+            calls.append(
+                {
+                    "batches": len(document["batches"]),
+                    "header": document["metadata"]["grift_version"],
+                    "header_from_core": document["metadata"] == build_header(document),
+                    "kwargs": kwargs,
+                }
+            )
             return original(self, document, **kwargs)
 
         monkeypatch.setattr(VdrMaxCollector, "submit_grift", _spy)
         _run(_register())
-        assert calls == [{"batches": 1, "kwargs": {}}]
+        assert calls == [{"batches": 1, "header": "1", "header_from_core": True, "kwargs": {}}]
