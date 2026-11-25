@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.8](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/compare/v0.1.7...v0.1.8) (2026-11-25)
+
+
+### Bug Fixes
+
+* **grift:** write the format "1" header from core's build_header in the VDR max collector ([520f38e](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/520f38e57837f0d99533adb7e3a9144b439da974))
+* **grift:** write the format "1" header from core's build_header in the VDR max collector ([d2d28b0](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/d2d28b06fe0cec752dc45aa1528d366a0e009c4f))
+
 ## [0.1.7](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/compare/v0.1.6...v0.1.7) (2026-11-24)
 
 
