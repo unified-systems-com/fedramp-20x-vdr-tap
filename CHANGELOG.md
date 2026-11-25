@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.9](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/compare/v0.1.8...v0.1.9) (2026-11-25)
+
+
+### Bug Fixes
+
+* ship the history event-time migration on the tap v0.5.0 floor ([5cc0147](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/5cc01477b787f305150906bca7e52d47d6d4416e))
+* ship the history event-time migration on the tap v0.5.0 floor ([d37d331](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/commit/d37d331b1d68cfa411df31c94ccc02f24adfdabf))
+
 ## [0.1.8](https://github.com/unified-systems-com/fedramp-20x-vdr-tap/compare/v0.1.7...v0.1.8) (2026-11-25)
 
 
