@@ -38,4 +38,4 @@ vdr-summary = "tap_plugin.fedramp_20x_vdr.searches.clocks.vdr_summary"
 [[boot.records]]
 name = "ci"
 description = "RESERVED NAME (req-boot-bootstrap-ci-record): the stack this plugin's own tests run in — depends_on closure + self, offline, credential-free. The consumer flips self to editable."
-sha256 = "ebb8552f7bd18cc0dcf22389817138329a73516b1663debcb8009031405ebbcf"
+sha256 = "07592d291b330eb6bf7fb2db8c8dd3619c4f165ec92aa5c641a63266aca34eba"
