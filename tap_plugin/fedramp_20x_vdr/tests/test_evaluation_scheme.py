@@ -22,6 +22,7 @@ from tap_cares.models import CollectionJobStatus, Collector
 from tap_cares.registry import collector_registry, reconcile_collector_nodes, register_collector
 from tap_cares.services import run_collection
 from tap_grid.grift import grift_import
+from tap_grid.grift.upgrade import build_header
 from tap_grid.models import Edge, Entity
 from tap_grid.registry import get_model_class
 from tap_grid.services import create_edge, create_node
@@ -107,8 +108,7 @@ class TestKey:
     @pytest.mark.spec("req-fedramp-20x-vdr-evaluation-1")
     def test_the_same_scheme_twice_is_one_node(self) -> None:
         def doc(rationale: str) -> dict[str, Any]:
-            return {
-                "metadata": {"grift_version": "0"},
+            document: dict[str, Any] = {
                 "_reserved": {},
                 "batches": [
                     {
@@ -124,6 +124,8 @@ class TestKey:
                     }
                 ],
             }
+            document["metadata"] = build_header(document)
+            return document
 
         for rationale in ("first", "second"):
             result = grift_import(doc(rationale))
