@@ -29,6 +29,6 @@ jobs:
     # 0004_history_event_time migration targets; plugin-ci's harness is the floor and runs `makemigrations --check`
     # over the plugin's models. Renovate does not track this pin: move it on purpose. The release-sbom and
     # nightly callers stay on v0.4.7 (2338a593): neither reusable workflow is part of the floor.
-    uses: unified-systems-com/tap/.github/workflows/plugin-ci.yml@af6c940e52bc68b50add3b9ff63e600da8265e58
+    uses: unified-systems-com/tap/.github/workflows/plugin-ci.yml@21e4e525af68f90e294030f43d74c4abaac7c36f
     with:
       plugin_slug: fedramp_20x_vdr
